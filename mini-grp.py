@@ -281,14 +281,15 @@ def my_main(cfg: DictConfig):
     import torch.optim.lr_scheduler as lr_scheduler
     scheduler = lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.1, total_iters=cfg.max_iters)
 
-    # import simpler_env
-    # from simpler_env.utils.env.observation_utils import get_image_from_maniskill2_obs_dict
-    # task_name = "widowx_carrot_on_plate"  # @param ["google_robot_pick_coke_can", "google_robot_move_near", "google_robot_open_drawer", "google_robot_close_drawer", "widowx_spoon_on_towel", "widowx_carrot_on_plate", "widowx_stack_cube", "widowx_put_eggplant_in_basket"]
-    # if 'env' in locals():
-    #     print("Closing existing env")
-    #     env.close()
-    #     del env
-    # env = simpler_env.make(task_name)
+    if cfg.simEval:
+        import simpler_env
+        from simpler_env.utils.env.observation_utils import get_image_from_maniskill2_obs_dict
+        task_name = "widowx_carrot_on_plate"  # @param ["google_robot_pick_coke_can", "google_robot_move_near", "google_robot_open_drawer", "google_robot_close_drawer", "widowx_spoon_on_towel", "widowx_carrot_on_plate", "widowx_stack_cube", "widowx_put_eggplant_in_basket"]
+        if 'env' in locals():
+            print("Closing existing env")
+            env.close()
+            del env
+        env = simpler_env.make(task_name)
 
     for iter in range(cfg.max_iters):
 
@@ -299,44 +300,48 @@ def my_main(cfg: DictConfig):
             if not cfg.testing:
                 wandb.log({"train loss": losses['train'], "val loss": losses['val']})
 
-            # obs, reset_info = env.reset()
-            # instruction = env.get_language_instruction()
-            # print("Reset info", reset_info)
-            # print("Instruction", instruction)
-            # frames, rewards = [], []
-            # done, truncated = False, False
-            # while not (done or truncated):
-            #     # action[:3]: delta xyz; action[3:6]: delta rotation in axis-angle representation;
-            #     # action[6:7]: gripper (the meaning of open / close depends on robot URDF)
-            #     image = get_image_from_maniskill2_obs_dict(env, obs)
-            #     action, loss = model.forward(torch.tensor(np.array([encode_state(resize_state(image))])).to(device)
-            #                            ,torch.tensor(np.array([encode_txt(instruction)[:cfg.block_size]])).to(device)
-            #                         #    ,torch.tensor(np.array([encode_state(resize_state(image))])).to(device)
-            #                            )
-            #     # action = env.action_space.sample() # replace this with your policy inference
-            #     action = np.concatenate((decode_action(action.cpu().detach().numpy()[0]), [0]), axis = -1) ## Add in the gripper close action
-            #     # print("action: ", action)
-            #     obs, reward, done, truncated, info = env.step(action)
-            #     frames.append(image)
-            #     rewards.append(reward)
-            
-            # episode_stats = info.get('episode_stats', {})
-            # print("Episode stats", episode_stats)
-            # print(f"avg reward {np.mean(rewards):.8f}")
-            # wandb.log({"avg reward": np.mean(rewards)})
-            # import moviepy.editor as mpy
-            # clip = mpy.ImageSequenceClip(list(frames), fps=20)
-            # clip.write_videofile("./data/sim-env-"+str(0)+".mp4", fps=20)
-            # wandb.log({"example": wandb.Video("./data/sim-env-"+str(0)+".mp4")})
+            if cfg.simEval:
+                obs, reset_info = env.reset()
+                instruction = env.get_language_instruction()
+                print("Reset info", reset_info)
+                print("Instruction", instruction)
+                frames, rewards = [], []
+                done, truncated = False, False
+                while not (done or truncated):
+                    # action[:3]: delta xyz; action[3:6]: delta rotation in axis-angle representation;
+                    # action[6:7]: gripper (the meaning of open / close depends on robot URDF)
+                    image = get_image_from_maniskill2_obs_dict(env, obs)
+                    action, loss = model.forward(torch.tensor(np.array([encode_state(resize_state(image))])).to(device)
+                                        ,torch.tensor(np.array([encode_txt(instruction)[:cfg.block_size]])).to(device)
+                                        #    ,torch.tensor(np.array([encode_state(resize_state(image))])).to(device)
+                                        )
+                    # action = env.action_space.sample() # replace this with your policy inference
+                    action = np.concatenate((decode_action(action.cpu().detach().numpy()[0]), [0]), axis = -1) ## Add in the gripper close action
+                    # print("action: ", action)
+                    obs, reward, done, truncated, info = env.step(action)
+                    frames.append(image)
+                    rewards.append(reward)
+                
+                episode_stats = info.get('episode_stats', {})
+                print("Episode stats", episode_stats)
+                print(f"avg reward {np.mean(rewards):.8f}")
+                wandb.log({"avg reward": np.mean(rewards)})
+                import moviepy.editor as mpy
+                clip = mpy.ImageSequenceClip(list(frames), fps=20)
+                clip.write_videofile("./data/sim-env-"+str(0)+".mp4", fps=20)
+                if not cfg.testing:
+                    wandb.log({"example": wandb.Video("./data/sim-env-"+str(0)+".mp4")})
 
         # sample a batch of data
         xb, xg, xgi, yb = get_batch_grp('train', dataset_tmp, cfg.batch_size)
 
         # evaluate the loss
         logits, loss = model(xb, xg, xgi, yb)
-        optimizer.zero_grad(set_to_none=True)
         loss.backward()
-        optimizer.step()
+
+        if (iter + 1) % cfg.gradient_accumulation_steps == 0:
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
 
     if not cfg.testing:
         wandb.finish()
