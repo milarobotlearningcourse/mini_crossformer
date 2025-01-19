@@ -3,7 +3,7 @@
 #SBATCH --cpus-per-gpu=8
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem=32G
-#SBATCH --time=23:59:00
+#SBATCH --time=1:59:00
 
 # Echo time and hostname into log
 echo "Date:     $(date)"

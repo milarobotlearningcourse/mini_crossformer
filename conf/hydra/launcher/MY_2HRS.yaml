@@ -12,7 +12,7 @@ exclude: null
 signal_delay_s: 600
 max_num_timeout: 20
 additional_parameters: {}
-array_parallelism: 1
+array_parallelism: 4
 setup: []
 mem_gb: 32
-gres: gpu:1
+gres: gpu:a100

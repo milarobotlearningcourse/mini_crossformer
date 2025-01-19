@@ -1,19 +1,9 @@
 defaults:
-  - override hydra/sweeper: optuna
-  - override hydra/sweeper/sampler: tpe
+  - override hydra/launcher: MY_2HRS
+  - _self_
 
-hydra:
-  sweeper:
-    sampler:
-      seed: 123
-    direction: minimize
-    study_name: grp-64-h-optim-TXT-multi-class
-    storage: null
-    n_trials: 6
-    n_jobs: 2
-    params:
-      batch_size: choice(128)
-      gradient_accumulation_steps: choice(1, 2, 4)
+experiment:
+  name: my_mini_grp_experiment 
   
 batch_size: 128 # how many independent sequences will we process in parallel?
 block_size: 32 ## Will be overidden by code
@@ -28,6 +18,7 @@ device: "cpu"
 testing: true
 simEval: false
 gradient_accumulation_steps: 4
+
 # ------------
 
 r_seed: 1337
