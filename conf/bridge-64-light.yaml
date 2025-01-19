@@ -2,6 +2,15 @@ defaults:
   - override hydra/launcher: MY_2HRS
   - _self_
 
+
+hydra:
+  launcher: 
+    gres: gpu:a100
+    mem_gb: 32
+    tasks_per_node: 1
+    cpus_per_task: 8
+    array_parallelism: 3
+
 experiment:
   name: mini_grp
   project: mini-grp

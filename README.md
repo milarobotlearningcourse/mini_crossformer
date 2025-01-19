@@ -64,7 +64,7 @@ conda install conda-forge::vulkan-tools conda-forge::vulkan-headers
 Basic example to train the GRP over the bridge dataset 
 
 ```
-
+python mini-grp.py
 ```
 
 Launch multiple jobs on a slurm cluster to evalute different model architectures, etc.

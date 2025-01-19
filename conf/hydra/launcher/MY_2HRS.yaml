@@ -13,6 +13,11 @@ signal_delay_s: 600
 max_num_timeout: 20
 additional_parameters: {}
 array_parallelism: 4
-setup: []
+setup: 
+  - module --quiet purge
+  - module load cudatoolkit/12.1
+  - module load miniconda/3
+  - conda activate roble
+  - unset CUDA_VISIBLE_DEVICES
 mem_gb: 32
 gres: gpu:a100
