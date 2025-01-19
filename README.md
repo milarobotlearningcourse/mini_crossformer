@@ -1,6 +1,6 @@
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://githubtocolab.com/milarobotlearningcourse/mini-grp/blob/main/mini-grp.ipynb)
 
-# octo-mini
+# Mini GRP: Mini- Generalist Robotics Policy
 
 Minimialist reimplimentation of the Octo Generalist Robotics Policy.
 
@@ -57,6 +57,20 @@ pip install -e .
 ```
 
 conda install conda-forge::vulkan-tools conda-forge::vulkan-headers
+
+
+## Running the code
+
+Basic example to train the GRP over the bridge dataset 
+
+```
+
+```
+
+Launch multiple jobs on a slurm cluster to evalute different model architectures, etc.
+```
+python mini-grp.py --multirun gradient_accumulation_steps=1,2,4 hydra/launcher=submitit_slurm
+```
 
 
 ### License

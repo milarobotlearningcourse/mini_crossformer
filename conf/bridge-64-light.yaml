@@ -3,7 +3,8 @@ defaults:
   - _self_
 
 experiment:
-  name: my_mini_grp_experiment 
+  name: mini_grp
+  project: mini-grp
   
 batch_size: 128 # how many independent sequences will we process in parallel?
 block_size: 32 ## Will be overidden by code

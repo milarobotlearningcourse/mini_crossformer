@@ -265,7 +265,7 @@ def my_main(cfg: DictConfig):
         # start a new wandb run to track this script
         wandb.init(
             # set the wandb project where this run will be logged
-            project="mini-grp-continuous",
+            project=cfg.experiment.project,
 
             # track hyperparameters and run metadata
             config= OmegaConf.to_container(cfg)
