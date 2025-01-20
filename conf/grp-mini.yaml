@@ -1,19 +1,19 @@
 defaults:
-  - override hydra/sweeper: optuna
-  - override hydra/sweeper/sampler: tpe
+  - override hydra/launcher: MY_2HRS
+  - _self_
+
 
 hydra:
-  sweeper:
-    sampler:
-      seed: 123
-    direction: minimize
-    study_name: grp-64-h-optim-continuous
-    storage: null
-    n_trials: 40
-    n_jobs: 2
-    params:
-      batch_size: choice(256, 512)
-      n_embd: choice(256, 512)
+  launcher: 
+    gres: gpu:a100
+    mem_gb: 32
+    tasks_per_node: 1
+    cpus_per_task: 8
+    array_parallelism: 4
+
+experiment:
+  name: mini_grp
+  project: mini-grp-continuous
   
 batch_size: 512 # how many independent sequences will we process in parallel?
 block_size: 32 # what is the maximum context length for predictions?
