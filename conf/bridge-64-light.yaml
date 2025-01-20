@@ -26,8 +26,8 @@ eval_iters: 200
 n_embd: 256
 device: "cpu"
 testing: true
-simEval: false
-gradient_accumulation_steps: 4
+simEval: true
+gradient_accumulation_steps: 2
 
 # ------------
 

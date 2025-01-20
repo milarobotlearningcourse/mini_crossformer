@@ -160,13 +160,13 @@ class GRP(nn.Module):
       elif isinstance(module, nn.Embedding):
           torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-  def forward(self, images, goals, goal_imgs, targets=None):
+  def forward(self, images, goals_txt, goal_imgs, targets=None):
     # Dividing images into patches
     n, c, h, w = images.shape
-    B, T = goals.shape
+    B, T = goals_txt.shape
     patches = get_patches_fast(images)
     patches_g = get_patches_fast(goal_imgs)
-    goals_e = self.token_embedding_table(goals)
+    goals_e = self.token_embedding_table(goals_txt)
     
     # Running linear layer tokenization
     # Map the vector corresponding to each patch to the hidden size dimension
@@ -290,6 +290,7 @@ def my_main(cfg: DictConfig):
             env.close()
             del env
         env = simpler_env.make(task_name)
+        env_unwrapped = env.env.env.env ## Updated gymnasium wrapper adds lots of wrappers.
 
     for iter in range(cfg.max_iters):
 
@@ -302,18 +303,19 @@ def my_main(cfg: DictConfig):
 
             if cfg.simEval:
                 obs, reset_info = env.reset()
-                instruction = env.get_language_instruction()
+                instruction = env_unwrapped.get_language_instruction()
                 print("Reset info", reset_info)
                 print("Instruction", instruction)
                 frames, rewards = [], []
-                done, truncated = False, False
-                while not (done or truncated):
+                done, truncated, timeLimit, t = False, False, 100, 0
+                while not (done or truncated or (t > timeLimit)):
                     # action[:3]: delta xyz; action[3:6]: delta rotation in axis-angle representation;
                     # action[6:7]: gripper (the meaning of open / close depends on robot URDF)
-                    image = get_image_from_maniskill2_obs_dict(env, obs)
+                    image = get_image_from_maniskill2_obs_dict(env_unwrapped, obs)
+                    image = image[:,:,:3] ## Remove last dimension of image color
                     action, loss = model.forward(torch.tensor(np.array([encode_state(resize_state(image))])).to(device)
                                         ,torch.tensor(np.array([encode_txt(instruction)[:cfg.block_size]])).to(device)
-                                        #    ,torch.tensor(np.array([encode_state(resize_state(image))])).to(device)
+                                        ,torch.tensor(np.array([encode_state(resize_state(image))])).to(device) ## Not the correct goal image... Should mask this.
                                         )
                     # action = env.action_space.sample() # replace this with your policy inference
                     action = np.concatenate((decode_action(action.cpu().detach().numpy()[0]), [0]), axis = -1) ## Add in the gripper close action
@@ -321,16 +323,18 @@ def my_main(cfg: DictConfig):
                     obs, reward, done, truncated, info = env.step(action)
                     frames.append(image)
                     rewards.append(reward)
+                    t=t+1
                 
                 episode_stats = info.get('episode_stats', {})
                 print("Episode stats", episode_stats)
                 print(f"avg reward {np.mean(rewards):.8f}")
-                wandb.log({"avg reward": np.mean(rewards)})
-                import moviepy.editor as mpy
-                clip = mpy.ImageSequenceClip(list(frames), fps=20)
-                clip.write_videofile("./data/sim-env-"+str(0)+".mp4", fps=20)
                 if not cfg.testing:
-                    wandb.log({"example": wandb.Video("./data/sim-env-"+str(0)+".mp4")})
+                    wandb.log({"avg reward": np.mean(rewards)})
+                # import moviepy.editor as mpy
+                # clip = mpy.ImageSequenceClip(list(frames), fps=20)
+                # clip.write_videofile("./data/sim-env-"+str(0)+".mp4", fps=20)
+                # if not cfg.testing:
+                #     wandb.log({"example": wandb.Video("./data/sim-env-"+str(0)+".mp4")})
 
         # sample a batch of data
         xb, xg, xgi, yb = get_batch_grp('train', dataset_tmp, cfg.batch_size)
