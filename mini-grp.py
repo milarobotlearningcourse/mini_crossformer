@@ -217,7 +217,7 @@ def my_main(cfg: DictConfig):
     cfg.device = device
     from datasets import load_dataset, load_from_disk
 
-    dataset = load_dataset(cfg.dataset, split='train')
+    dataset = load_dataset(cfg.dataset.to_name, split='train')
     print('Features:', dataset.features)
 
     dataset_tmp = {
@@ -307,32 +307,34 @@ def my_main(cfg: DictConfig):
                 wandb.log({"train loss": losses['train'], "val loss": losses['val']})
 
             if cfg.simEval and (iter % cfg.eval_vid_iters == 0):
-                obs, reset_info = env.reset()
-                instruction = env_unwrapped.get_language_instruction()
-                print("Reset info", reset_info)
-                print("Instruction", instruction)
-                frames, rewards = [], []
-                done, truncated, timeLimit, t = False, False, 100, 0
-                while not (done or truncated or (t > timeLimit)):
-                    # action[:3]: delta xyz; action[3:6]: delta rotation in axis-angle representation;
-                    # action[6:7]: gripper (the meaning of open / close depends on robot URDF)
-                    image = get_image_from_maniskill2_obs_dict(env_unwrapped, obs)
-                    image = image[:,:,:3] ## Remove last dimension of image color
-                    action, loss = model.forward(torch.tensor(np.array([encode_state(resize_state(image))])).to(device)
-                                        ,torch.tensor(np.array([encode_txt(instruction)[:cfg.block_size]])).to(device)
-                                        ,torch.tensor(np.array([encode_state(resize_state(image))])).to(device) ## Not the correct goal image... Should mask this.
-                                        )
-                    # action = env.action_space.sample() # replace this with your policy inference
-                    if cfg.load_action_bounds:
-                        action = decode_action(action.cpu().detach().numpy()[0]) ## Add in the gripper close action
-                    else:
-                        action = np.concatenate((decode_action(action.cpu().detach().numpy()[0]), [0]), axis = -1) ## Add in the gripper close action
-                    # print("action: ", action)
-                    obs, reward, done, truncated, info = env.step(action)
-                    reward = -np.linalg.norm(info["eof_to_obj1_diff"])
-                    frames.append(image)
-                    rewards.append(reward)
-                    t=t+1
+                rewards = []
+                for j in range(cfg.sim.eval_episodes):
+                    obs, reset_info = env.reset()
+                    instruction = env_unwrapped.get_language_instruction()
+                    print("Reset info", reset_info)
+                    print("Instruction", instruction)
+                    frames = []
+                    done, truncated, timeLimit, t = False, False, 100, 0
+                    while not (done or truncated or (t > timeLimit)):
+                        # action[:3]: delta xyz; action[3:6]: delta rotation in axis-angle representation;
+                        # action[6:7]: gripper (the meaning of open / close depends on robot URDF)
+                        image = get_image_from_maniskill2_obs_dict(env_unwrapped, obs)
+                        image = image[:,:,:3] ## Remove last dimension of image color
+                        action, loss = model.forward(torch.tensor(np.array([encode_state(resize_state(image))])).to(device)
+                                            ,torch.tensor(np.array([encode_txt(instruction)[:cfg.block_size]])).to(device) ## There can be issues here if th text is shorter than any example in the dataset
+                                            ,torch.tensor(np.array([encode_state(resize_state(image))])).to(device) ## Not the correct goal image... Should mask this.
+                                            )
+                        # action = env.action_space.sample() # replace this with your policy inference
+                        if cfg.load_action_bounds:
+                            action = decode_action(action.cpu().detach().numpy()[0]) ## Add in the gripper close action
+                        else:
+                            action = np.concatenate((decode_action(action.cpu().detach().numpy()[0]), [0]), axis = -1) ## Add in the gripper close action
+                        # print("action: ", action)
+                        obs, reward, done, truncated, info = env.step(action)
+                        reward = -np.linalg.norm(info["eof_to_obj1_diff"])
+                        frames.append(image)
+                        rewards.append(reward)
+                        t=t+1
                 
                 episode_stats = info.get('episode_stats', {})
                 print("Episode stats", episode_stats)

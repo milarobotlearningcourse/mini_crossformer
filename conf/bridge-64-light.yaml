@@ -52,8 +52,15 @@ env:
 
 ## Model hyperparameters
 image_shape: [64, 64, 3]
-dataset: gberseth/mini-bridge-mini64px
+dataset: 
+  from_name: "gs://gresearch/robotics/bridge/0.1.0/"
+  to_name: gberseth/mini-bridge-mini64px
+  num_episodes: 10
 trim: 1000000
+
+
+sim:
+  eval_episodes: 8
 
 # if true, simulate a failure by raising an exception
 error: false
