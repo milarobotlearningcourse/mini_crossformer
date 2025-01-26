@@ -224,7 +224,7 @@ def my_main(cfg: DictConfig):
         "img": np.array(dataset["img"]),
         "action": np.concatenate((np.array(dataset["action"]) 
                                 ,np.array(dataset["rotation_delta"])
-                                # .np.array(dataset["open_gripper"])
+                                ,np.array(dataset["open_gripper"])
                                 ), axis=1),
         "goal_img": np.array(dataset["goal_img"]),
         "goal": dataset["goal"]
@@ -243,7 +243,11 @@ def my_main(cfg: DictConfig):
     print("vocab_size:", cfg.vocab_size)
     print("example text encode:", encode_txt(dataset_tmp["goal"][0]))
 
-    a_std, a_mean = (dataset_tmp["action"].std(axis=0) + 0.001) * 1.5, dataset_tmp["action"].mean(axis=0)
+    if cfg.load_action_bounds == True:
+        a_std, a_mean = cfg.env.action_std, cfg.env.action_mean
+        a_std[6] = cfg.env.gripper_closed_std
+    else:
+        a_std, a_mean = (dataset_tmp["action"].std(axis=0) + 0.001) * 1.5, dataset_tmp["action"].mean(axis=0)
     cfg.action_bins = len(a_mean)
     encode_action = lambda af:   (((af - a_mean)/(a_std))).astype(np.float32) # encoder: take a float, output an integer
 
@@ -319,7 +323,10 @@ def my_main(cfg: DictConfig):
                                         ,torch.tensor(np.array([encode_state(resize_state(image))])).to(device) ## Not the correct goal image... Should mask this.
                                         )
                     # action = env.action_space.sample() # replace this with your policy inference
-                    action = np.concatenate((decode_action(action.cpu().detach().numpy()[0]), [0]), axis = -1) ## Add in the gripper close action
+                    if cfg.load_action_bounds:
+                        action = decode_action(action.cpu().detach().numpy()[0]) ## Add in the gripper close action
+                    else:
+                        action = np.concatenate((decode_action(action.cpu().detach().numpy()[0]), [0]), axis = -1) ## Add in the gripper close action
                     # print("action: ", action)
                     obs, reward, done, truncated, info = env.step(action)
                     reward = -np.linalg.norm(info["eof_to_obj1_diff"])

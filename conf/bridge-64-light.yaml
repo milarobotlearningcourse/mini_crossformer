@@ -5,7 +5,7 @@ defaults:
 
 hydra:
   launcher: 
-    gres: gpu:a100 #rtx8000:1
+    gres: gpu:a100 # 
     # gpus-per-task: rtx8000:1
     mem_gb: 32
     tasks_per_node: 1
@@ -44,6 +44,11 @@ n_blocks: 4
 dropout: 0.2
 action_bins: 10
 action_dim: 6
+load_action_bounds: true
+env:
+  action_std: [0.016753544993060053, 0.023366538587021844, 0.020825098821764754, 0.04094312200887319, 0.0450425630283353, 0.07591476573186073, 1.0]
+  action_mean: [0.0005073429474377862, 0.0010121935122961018, 0.00047337321896007546, 0.0004149420738629149, -0.0018587493762149167, 0.0020303972612628974, 0.5]
+  gripper_closed_std: 1.0
 
 ## Model hyperparameters
 image_shape: [64, 64, 3]
