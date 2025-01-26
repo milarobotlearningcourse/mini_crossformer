@@ -11,7 +11,7 @@ Minimialist reimplimentation of the Octo Generalist Robotics Policy.
 conda create -n mini-grp python=3.10
 conda activate mini-grp
 pip install -r requirements.txt
-conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia 
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 pip install torch==2.4.0
 pip install hydra-submitit-launcher --upgrade
