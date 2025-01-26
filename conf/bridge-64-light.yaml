@@ -9,7 +9,7 @@ hydra:
     mem_gb: 32
     tasks_per_node: 1
     cpus_per_task: 8
-    array_parallelism: 3
+    array_parallelism: 1 # I think this means run per job.
 
 experiment:
   name: mini_grp
