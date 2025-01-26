@@ -322,6 +322,7 @@ def my_main(cfg: DictConfig):
                     action = np.concatenate((decode_action(action.cpu().detach().numpy()[0]), [0]), axis = -1) ## Add in the gripper close action
                     # print("action: ", action)
                     obs, reward, done, truncated, info = env.step(action)
+                    reward = -np.linalg.norm(info["eof_to_obj1_diff"])
                     frames.append(image)
                     rewards.append(reward)
                     t=t+1
@@ -331,6 +332,7 @@ def my_main(cfg: DictConfig):
                 print(f"avg reward {np.mean(rewards):.8f}")
                 if not cfg.testing:
                     wandb.log({"avg reward": np.mean(rewards)})
+                    # wandb.log({"avg reward": np.mean(rewards)})
                 import moviepy.editor as mpy
                 clip = mpy.ImageSequenceClip(list(frames), fps=20)
                 clip.write_videofile(log_dir+"/sim-env-"+str(iter)+".mp4", fps=20)
