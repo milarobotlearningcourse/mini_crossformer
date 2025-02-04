@@ -67,8 +67,17 @@ class Head(nn.Module):
 
     def forward(self, x, mask=None):
         B,T,C = x.shape
+        # [TODO]
+        """
+        [DEFAULT]
+        # TODO: 
+        ## Provide the block masking
+        pass
+        [/DEFAULT]
+        """
         if mask == None:
             mask = torch.ones((T, ), device=self.device) ## (1, T)
+        # [/TODO]
         k = self.key(x)   # (B,T,C)
         q = self.query(x) # (B,T,C)
         # compute attention scores ("affinities")
@@ -133,6 +142,18 @@ class GRP(nn.Module):
     super(GRP, self).__init__()
     self._dataset = dataset
     self._cfg = cfg
+    # [TODO]
+    """
+    [DEFAULT]
+    # TODO: 
+    ## Provide the logic for the GRP network
+
+    # 4) Transformer encoder blocks
+
+    # 5) Classification MLPk
+    
+    [/DEFAULT]
+    """
     self.patch_size = (self._cfg.image_shape[0] / self._cfg.n_patches, self._cfg.image_shape[1] / self._cfg.n_patches)
     #Positional embedding
     self.register_buffer('positional_embeddings', calc_positional_embeddings(1 + self._cfg.n_patches ** 2 + self._cfg.block_size + self._cfg.n_patches ** 2, cfg.n_embd), persistent=False)
@@ -151,6 +172,7 @@ class GRP(nn.Module):
     self.mlp = nn.Sequential(
         nn.Linear(self._cfg.n_embd, self._cfg.action_bins),
     )
+    # [/TODO]
 
   def _init_weights(self, module):
       if isinstance(module, nn.Linear):
@@ -164,6 +186,28 @@ class GRP(nn.Module):
     # Dividing images into patches
     n, c, h, w = images.shape
     B, T = goals_txt.shape
+    # [TODO]
+    """
+    [DEFAULT]
+    # TODO: 
+    ## Provide the logic to produce the output and loss for the GRP
+    
+    # Map the vector corresponding to each patch to the hidden size dimension
+
+    # Adding classification and goal_img tokens to the tokens
+
+    # Adding positional embedding
+
+    # Compute blocked masks
+
+    # Transformer Blocks
+
+    # Getting the classification token only
+
+    # Compute output and loss
+
+    [/DEFAULT]
+    """
     patches = get_patches_fast(images)
     patches_g = get_patches_fast(goal_imgs)
     goals_e = self.token_embedding_table(goals_txt)
@@ -202,6 +246,7 @@ class GRP(nn.Module):
         B, C = out.shape
         loss = F.mse_loss(out, targets) ## B, C
     return (out, loss)
+    # [/TODO]
 
 import hydra, json
 from omegaconf import DictConfig, OmegaConf
@@ -243,6 +288,14 @@ def my_main(cfg: DictConfig):
     print("vocab_size:", cfg.vocab_size)
     print("example text encode:", encode_txt(dataset_tmp["goal"][0]))
 
+    # [TODO]
+    """
+    [DEFAULT]
+    # TODO: 
+    ## Provide the logic for the GRP policy for discretized or continuous actions
+    
+    [/DEFAULT]
+    """
     if cfg.load_action_bounds == True:
         a_std, a_mean = cfg.env.action_std, cfg.env.action_mean
         a_std[6] = cfg.env.gripper_closed_std
@@ -250,11 +303,12 @@ def my_main(cfg: DictConfig):
         a_std, a_mean = (dataset_tmp["action"].std(axis=0) + 0.001) * 1.5, dataset_tmp["action"].mean(axis=0)
     cfg.action_bins = len(a_mean)
     encode_action = lambda af:   (((af - a_mean)/(a_std))).astype(np.float32) # encoder: take a float, output an integer
+    decode_action = lambda binN: (binN * a_std) + a_mean  # Undo mapping to [-1, 1]
+    # [/TODO]
 
     ## Get the actions and encode them to map to [-1, 1]
     encode_state = lambda af:   ((af/(255.0)*2.0)-1.0).astype(np.float32) # encoder: take a float, output an integer
     resize_state = lambda sf:   cv2.resize(np.array(sf, dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))  # resize state
-    decode_action = lambda binN: (binN * a_std) + a_mean  # Undo mapping to [-1, 1]
 
     dataset_tmp = {
         "img": torch.tensor(encode_state(dataset_tmp["img"])).to(device),
@@ -278,7 +332,6 @@ def my_main(cfg: DictConfig):
         wandb.run.log_code(".")
     model = GRP(dataset_tmp, cfg)
     m = model.to(device)
-    # print the number of parameters in the model
     print(sum(p.numel() for p in m.parameters())/1e6, 'M parameters')
 
     # create a PyTorch optimizer
@@ -299,16 +352,15 @@ def my_main(cfg: DictConfig):
 
     for iter in range(cfg.max_iters):
 
-        # every once in a while evaluate the loss on train and val sets
         if iter % cfg.eval_interval == 0 or iter == cfg.max_iters - 1:
             losses = estimate_loss(model)
             print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
             if not cfg.testing:
                 wandb.log({"train loss": losses['train'], "val loss": losses['val']})
 
-            if cfg.simEval and (iter % cfg.eval_vid_iters == 0):
+            if cfg.simEval and (iter % cfg.eval_vid_iters == 0): ## Do this eval infrequently because it takes a fiar bit of compute
                 rewards = []
-                for j in range(cfg.sim.eval_episodes):
+                for j in range(cfg.sim.eval_episodes): ## Better to eval over a few different goal configurations
                     obs, reset_info = env.reset()
                     instruction = env_unwrapped.get_language_instruction()
                     print("Reset info", reset_info)
@@ -329,7 +381,6 @@ def my_main(cfg: DictConfig):
                             action = decode_action(action.cpu().detach().numpy()[0]) ## Add in the gripper close action
                         else:
                             action = np.concatenate((decode_action(action.cpu().detach().numpy()[0]), [0]), axis = -1) ## Add in the gripper close action
-                        # print("action: ", action)
                         obs, reward, done, truncated, info = env.step(action)
                         reward = -np.linalg.norm(info["eof_to_obj1_diff"])
                         frames.append(image)
@@ -341,7 +392,6 @@ def my_main(cfg: DictConfig):
                 print(f"avg reward {np.mean(rewards):.8f}")
                 if not cfg.testing:
                     wandb.log({"avg reward": np.mean(rewards)})
-                    # wandb.log({"avg reward": np.mean(rewards)})
                 import moviepy.editor as mpy
                 clip = mpy.ImageSequenceClip(list(frames), fps=20)
                 clip.write_videofile(log_dir+"/sim-env-"+str(iter)+".mp4", fps=20)

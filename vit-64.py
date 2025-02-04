@@ -143,10 +143,7 @@ class VIT(nn.Module):
     self.patch_size = (cfg.image_shape[0] / cfg.n_patches, cfg.image_shape[1] / cfg.n_patches)
 
     #Positional embedding
-    # self.pos_embed = nn.Parameter(torch.tensor(positional_embeddings(n_patches ** 2 + 1, embedding_size)))
-    # self. pos_embed.requires_grad = False
     self.register_buffer('positional_embeddings', calc_positional_embeddings(cfg.n_patches ** 2 + 1, cfg.n_embd), persistent=False)
-    # self.position_embedding_table = nn.Embedding(n_patches ** 2 + 1, n_embd)
     
     self.class_tokens = nn.Parameter(torch.rand(1, cfg.n_embd))
 
@@ -177,8 +174,6 @@ class VIT(nn.Module):
     
     # Adding positional embedding
     out = out + self.positional_embeddings.repeat(n, 1, 1)
-    # pos_emb = self.position_embedding_table(torch.arange(n_patches ** 2 + 1, device=device)) # (T,C)
-    # out = out + pos_emb
     
     # Transformer Blocks
     for block in self.blocks:
