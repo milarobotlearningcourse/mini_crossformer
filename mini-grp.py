@@ -245,8 +245,8 @@ class GRP(nn.Module):
     else:
         B, C = out.shape
         loss = F.mse_loss(out, targets) ## B, C
-    return (out, loss)
     # [/TODO]
+    return (out, loss)
 
 import hydra, json
 from omegaconf import DictConfig, OmegaConf
@@ -310,22 +310,29 @@ def my_main(cfg: DictConfig):
     encode_state = lambda af:   ((af/(255.0)*2.0)-1.0).astype(np.float32) # encoder: take a float, output an integer
     resize_state = lambda sf:   cv2.resize(np.array(sf, dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))  # resize state
 
-    dataset_tmp = {
-        "img": torch.tensor(encode_state(dataset_tmp["img"])).to(device),
-        "action": torch.tensor(encode_action(dataset_tmp["action"]), dtype=torch.float).to(device),            
-        "goal_img": torch.tensor(encode_state(dataset_tmp["goal_img"])).to(device),
-        "goal": torch.tensor([encode_txt(goal[:cfg.block_size]) for goal in dataset_tmp["goal"]]).to(device)
+    n = int(0.9*len(dataset_tmp["img"])) # first 90% will be train, rest val
+    dataset_tmp = { 
+        "train":
+            {
+            "img": torch.tensor(encode_state(dataset_tmp["img"][:n])).to(device),
+            "action": torch.tensor(encode_action(dataset_tmp["action"][:n]), dtype=torch.float).to(device),            
+            "goal_img": torch.tensor(encode_state(dataset_tmp["goal_img"][:n])).to(device),
+            "goal": torch.tensor([encode_txt(goal[:cfg.block_size]) for goal in dataset_tmp["goal"][:n]]).to(device)
+            },
+        "test": 
+        {
+            "img": torch.tensor(encode_state(dataset_tmp["img"][n:])).to(device),
+            "action": torch.tensor(encode_action(dataset_tmp["action"][n:]), dtype=torch.float).to(device),            
+            "goal_img": torch.tensor(encode_state(dataset_tmp["goal_img"][n:])).to(device),
+            "goal": torch.tensor([encode_txt(goal[:cfg.block_size]) for goal in dataset_tmp["goal"][n:]]).to(device)
+        }
     }
 
-    print("Dataset shape:", len(dataset_tmp["img"]))
-    dataset_tmp = {"train": dataset_tmp, "test": dataset_tmp} 
     if not cfg.testing:
         import wandb
         # start a new wandb run to track this script
         wandb.init(
-            # set the wandb project where this run will be logged
             project=cfg.experiment.project,
-
             # track hyperparameters and run metadata
             config= OmegaConf.to_container(cfg)
         )

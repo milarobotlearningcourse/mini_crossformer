@@ -79,7 +79,7 @@ if __name__ == "__main__":
   for root, dirs, files in os.walk(args.target):
     for file in files:
       # if the file is a python file
-      if file.endswith(".py"):
+      if file.endswith(".py") or file.endswith(".ipynb"):
         path = os.path.join(root, file)
         # obfuscate the file
         # check if the file was obfuscated

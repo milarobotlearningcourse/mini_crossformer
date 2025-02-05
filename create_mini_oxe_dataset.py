@@ -34,17 +34,6 @@ def my_main(cfg: DictConfig):
             dataset_tmp["goal"].append(episode[i]['observation']['natural_language_instruction'].numpy().decode())
             dataset_tmp["goal_img"].append(Image.fromarray(goal_img.astype('uint8') ))
 
-    # here are all the unique characters that occur in this text
-    chars = sorted(list(set([item for row in dataset_tmp["goal"] for item in row]))) ## Flatten to a long string
-    vocab_size = len(chars)
-    # create a mapping from characters to integers
-    stoi = { ch:i for i,ch in enumerate(chars) }
-    itos = { i:ch for i,ch in enumerate(chars) }
-    encode_txt = lambda s: [stoi[c] for c in s] # encoder: take a string, output a list of integers
-    decode_txy = lambda l: ''.join([itos[i] for i in l]) # decoder: take a list of integers, output a string
-    print("vocab_size:", vocab_size)
-    print("example text encode:", encode_txt(dataset_tmp["goal"][0]))
-
     print("Dataset shape:", len(dataset_tmp["img"]))
     dataset = {}
     dataset["img"] = dataset_tmp["img"]
@@ -54,37 +43,15 @@ def my_main(cfg: DictConfig):
     dataset["goal"] = dataset_tmp["goal"]
     dataset["goal_img"] = dataset_tmp["goal_img"]
 
-    # dataset = {"train": dataset_tmp} 
-
     ## Prepare dataset for push to huggingface
     from datasets import Dataset
     import datasets
-    from datasets import ClassLabel, Value, Image, Features, Array2D, Array4D, Sequence, Array3D
-    # features = Features({
-    #     'goal': Value('string'),
-    #     'img': Image(),
-    #     'goal_img': Image(),
-    #     'rotation_delta': Array2D(shape=(1, 3), dtype="float32"),
-    #     'open_gripper': Array2D(shape=(1, 1), dtype="uint8"),
-    #     'action': Array2D(shape=(1, 3), dtype="float32"),
-    #     ## Sequence(feature=Value(dtype='float32', id=None), length=-1, id=None)
-    # })
+    from datasets import Image
 
     ds = Dataset.from_dict(dataset)
-    # ds.add_column(name="img", column=dataset["img"])
-    # ds = ds.train_test_split(test_size=0.1)
-    print("Dataset: ", ds)
-    # ds = ds.with_format("np")
-    print("Dataset: ", ds)
 
     new_features = ds.features.copy()
     new_features["img"] = Image()
-    # new_features["img"] = Sequence(Array3D(shape=dataset_tmp["img"].shape[1:], dtype='uint8'))
-    # new_features["goal_img"] = Array3D(shape=dataset["goal_img"].shape[1:], dtype='uint8')
-    # new_features["action"] = Value('float')
-    # new_features["rotation_delta"] = Value('float')
-    # new_features["open_gripper"] = Value('bool')
-    # new_features["goal"] = Value('string'),
     ds.cast(new_features)
     print('Features:', ds.features)
     ds.save_to_disk("datasets/" + cfg.dataset.to_name + ".hf")
