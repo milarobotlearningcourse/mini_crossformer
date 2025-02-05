@@ -6,7 +6,7 @@ A Generalist Robtoics Policy (GRP) is made up from a modified [vision transforme
 
 You can complete the homework by addressing the todos in [mini-grp.py](mini-grp.py)
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://githubtocolab.com/Neo-X/mini-grp/blob/main/mini-grp-learn.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://githubtocolab.com/milarobotlearningcourse/robot_learning_2025/blob/main/hw2/mini-grp-learn.ipynb)
 
 ## GRP Transformer Similar to [Octo](https://octo-models.github.io/).
 
