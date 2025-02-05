@@ -34,7 +34,7 @@ Prerequisites:
 Clone this repo:
 
 ```
-git clone https://github.com/milarobotlearning/SimplerEnv --recurse-submodules
+git clone https://github.com/milarobotlearningcourse/SimplerEnv --recurse-submodules
 ```
 
 Install numpy<2.0 (otherwise errors in IK might occur in pinocchio):
