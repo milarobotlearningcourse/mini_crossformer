@@ -2,13 +2,62 @@
 
 # HW: Making a Generalist Robotics Policy
 
-A Generalist Robtoics Policy (GRP) is made up from a modified [vision transformer](https://arxiv.org/abs/2010.11929). I vision transfer is a modified version of a transformer that is designed to process images instead of text. In order for a transformer to process images the images need to be sliced up into patches that can be tokenized.
+A Generalist Robtoics Policy (GRP) is made up from a modified [vision transformer](https://arxiv.org/abs/2010.11929). A vision transfer is a modified version of a transformer that is designed to process images instead of text. In order for a transformer to process images the images need to be sliced up into patches that can be tokenized.
 
 You can complete the homework by addressing the todos in [mini-grp.py](mini-grp.py)
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://githubtocolab.com/milarobotlearningcourse/robot_learning_2025/blob/main/hw2/mini-grp-learn.ipynb)
 
-## GRP Transformer Similar to [Octo](https://octo-models.github.io/).
+## Installation
+
+```
+conda create -n mini-grp python=3.10
+conda activate mini-grp
+pip install -r requirements.txt
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+pip install torch==2.4.0
+pip install hydra-submitit-launcher --upgrade
+```
+
+### Install SimpleEnv
+
+Prerequisites:
+
+    CUDA version >=11.8 (this is required if you want to perform a full installation of this repo and perform RT-1 or Octo inference)
+    An NVIDIA GPU (ideally RTX; for non-RTX GPUs, such as 1080Ti and A100, environments that involve ray tracing will be slow). Currently TPU is not supported as SAPIEN requires a GPU to run.
+
+Clone this repo:
+
+```
+git clone https://github.com/milarobotlearningcourse/SimplerEnv --recurse-submodules
+```
+
+Install numpy<2.0 (otherwise errors in IK might occur in pinocchio):
+
+```
+pip install numpy==1.24.4
+```
+
+Install ManiSkill2 real-to-sim environments and their dependencies:
+
+```
+cd {this_repo}/ManiSkill2_real2sim
+pip install -e .
+```
+
+Install this package:
+
+```
+cd {this_repo}
+pip install -e .
+```
+
+```
+conda install conda-forge::vulkan-tools conda-forge::vulkan-headers
+```
+
+# GRP Transformer Similar to [Octo](https://octo-models.github.io/).
 
 The provided [code](mini-grp.py) is an example of a vision transformer. Modifiy this code to become a multi-modal transformer model that accepts images and text as input and outputs either classes or continuous values. Make sure to impliment the block masking to train the model to work when goals are provided via images or text.
 
@@ -41,12 +90,3 @@ One of the many methods used to smooth motion and compensate for multi-modal beh
 
 1. If you are having trouble training the model and not running out of memory, use a smaller batch size and gradient accumulation. Training will take a little longer, but should work.
 
-
-
-# Bonus:
-
-Some additional tasks for bonus marks if yo have time.
-
-## Increase Image Size
-
-The dataset cleaned for the original version of the homework is 64 x 64 x 3. This image resultion can work but will often cause issues when objects are too small. Becasue the objects are so small they appear in the image via very few pixels, making it challenging for the GRP to pickup on these fine details. re-create the dataset with 96 x 96 x 3 size images. Does this increase in image size improve the performance?
