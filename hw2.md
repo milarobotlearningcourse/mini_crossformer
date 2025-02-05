@@ -63,7 +63,7 @@ The provided [code](mini-grp.py) is an example of a vision transformer. Modifiy 
 
 ### Discrete vs Continuous Action Space
 
-There are different methods that can be used to model the action distribution. Many papers have discretetized the action space (OpenAI Hand), resulting in good performance. Train the GRP model with a discrete representation (cross entropy) vs a continuous representation (MSE) and compare the performance of these two distributions. Compare the performance in [simpleEnv](https://simpler-env.github.io/)
+There are different methods that can be used to model the action distribution. Many papers have discretetized the action space (OpenAI Hand), resulting in good performance. Train the GRP model with a discrete representation (cross entropy) vs a continuous representation (MSE) and compare the performance of these two distributions. Compare the performance in [simpleEnv](https://github.com/milarobotlearningcourse/SimplerEnv)
 
 ### Effect of Encoding Size
 
@@ -76,7 +76,7 @@ The text tokenization and encoding provided in the initial version of the code i
 
 ## Grow the Dataset
 
-The dataset used for training is rather small (100 trajectories) but works and fits on small GPUs. Use the `create_mini_oxe_dataset.py` file to collect more data (250 trajectories instead of 100) and retrain the model. Does performance increase? Share the learning curves.
+The dataset used for training is rather small (100 trajectories) but works and fits on small GPUs. Use the [create_mini_oxe_dataset.py](create_mini_oxe_dataset.py) file to collect more data (250 trajectories instead of 100) and retrain the model. Does performance increase? Share the learning curves.
 
 ## State History
 
