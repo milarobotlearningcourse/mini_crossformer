@@ -67,17 +67,9 @@ class Head(nn.Module):
 
     def forward(self, x, mask=None):
         B,T,C = x.shape
-        # [TODO]
-        """
-        [DEFAULT]
         # TODO: 
         ## Provide the block masking
         pass
-        [/DEFAULT]
-        """
-        if mask == None:
-            mask = torch.ones((T, ), device=self.device) ## (1, T)
-        # [/TODO]
         k = self.key(x)   # (B,T,C)
         q = self.query(x) # (B,T,C)
         # compute attention scores ("affinities")
@@ -142,37 +134,12 @@ class GRP(nn.Module):
     super(GRP, self).__init__()
     self._dataset = dataset
     self._cfg = cfg
-    # [TODO]
-    """
-    [DEFAULT]
     # TODO: 
     ## Provide the logic for the GRP network
 
     # 4) Transformer encoder blocks
 
     # 5) Classification MLPk
-    
-    [/DEFAULT]
-    """
-    self.patch_size = (self._cfg.image_shape[0] / self._cfg.n_patches, self._cfg.image_shape[1] / self._cfg.n_patches)
-    #Positional embedding
-    self.register_buffer('positional_embeddings', calc_positional_embeddings(1 + self._cfg.n_patches ** 2 + self._cfg.block_size + self._cfg.n_patches ** 2, cfg.n_embd), persistent=False)
-
-    self.token_embedding_table = nn.Embedding(cfg.vocab_size, cfg.n_embd)
-    self.class_tokens = nn.Parameter(torch.rand(1, cfg.n_embd))
-
-    self.input_d = int(self._cfg.image_shape[2] * self.patch_size[0] * self.patch_size[1])
-
-    self.lin_map = nn.Linear(self.input_d, self._cfg.n_embd, bias=False) 
-
-    # 4) Transformer encoder blocks
-    self.blocks = nn.ModuleList([Block(self._cfg.n_embd, self._cfg.n_head, dropout=self._cfg.dropout) for _ in range(self._cfg.n_blocks)])
-
-    # 5) Classification MLPk
-    self.mlp = nn.Sequential(
-        nn.Linear(self._cfg.n_embd, self._cfg.action_bins),
-    )
-    # [/TODO]
 
   def _init_weights(self, module):
       if isinstance(module, nn.Linear):
@@ -186,9 +153,6 @@ class GRP(nn.Module):
     # Dividing images into patches
     n, c, h, w = images.shape
     B, T = goals_txt.shape
-    # [TODO]
-    """
-    [DEFAULT]
     # TODO: 
     ## Provide the logic to produce the output and loss for the GRP
     
@@ -205,47 +169,6 @@ class GRP(nn.Module):
     # Getting the classification token only
 
     # Compute output and loss
-
-    [/DEFAULT]
-    """
-    patches = get_patches_fast(images)
-    patches_g = get_patches_fast(goal_imgs)
-    goals_e = self.token_embedding_table(goals_txt)
-    
-    # Running linear layer tokenization
-    # Map the vector corresponding to each patch to the hidden size dimension
-    out = self.lin_map(patches)
-    out_g = self.lin_map(patches_g)
-    
-    # Adding classification and goal_img tokens to the tokens
-    out = torch.cat((self.class_tokens.expand(n, 1, -1), out, goals_e, out_g), dim=1)
-    
-    # Adding positional embedding
-    out = out + self.positional_embeddings.repeat(n, 1, 1)
-
-    ## Compute blocked masks
-    mask = torch.ones((1 + c + T + c, ), device=self._cfg.device) ## (1, T)
-    if targets is None:
-        pass
-    elif (torch.rand(1)[0] > 0.66):  
-        mask[1 + c: 1 + c+ T] = torch.zeros((1,T), device=self._cfg.device) ## Mask goal string
-    elif (torch.rand(1)[0] > 0.33):
-        mask[1 + c + T: 1 + c + T + c] = torch.zeros((1,c), device=self._cfg.device) ## Mask goal image
-        
-    # Transformer Blocks
-    for block in self.blocks:
-        out = block(out, mask)
-
-    # Getting the classification token only
-    out = out[:, 0]
-    out = self.mlp(out)
-        
-    if targets is None:
-        loss = None
-    else:
-        B, C = out.shape
-        loss = F.mse_loss(out, targets) ## B, C
-    # [/TODO]
     return (out, loss)
 
 import hydra, json
@@ -288,23 +211,8 @@ def my_main(cfg: DictConfig):
     print("vocab_size:", cfg.vocab_size)
     print("example text encode:", encode_txt(dataset_tmp["goal"][0]))
 
-    # [TODO]
-    """
-    [DEFAULT]
     # TODO: 
     ## Provide the logic for the GRP policy for discretized or continuous actions
-    
-    [/DEFAULT]
-    """
-    if cfg.load_action_bounds == True:
-        a_std, a_mean = cfg.env.action_std, cfg.env.action_mean
-        a_std[6] = cfg.env.gripper_closed_std
-    else:
-        a_std, a_mean = (dataset_tmp["action"].std(axis=0) + 0.001) * 1.5, dataset_tmp["action"].mean(axis=0)
-    cfg.action_bins = len(a_mean)
-    encode_action = lambda af:   (((af - a_mean)/(a_std))).astype(np.float32) # encoder: take a float, output an integer
-    decode_action = lambda binN: (binN * a_std) + a_mean  # Undo mapping to [-1, 1]
-    # [/TODO]
 
     ## Get the actions and encode them to map to [-1, 1]
     encode_state = lambda af:   ((af/(255.0)*2.0)-1.0).astype(np.float32) # encoder: take a float, output an integer
