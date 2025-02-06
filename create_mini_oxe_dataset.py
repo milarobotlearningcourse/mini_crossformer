@@ -1,6 +1,5 @@
 ## Code to fetch data and create an easy dataset.
 
-
 import hydra, json
 from omegaconf import DictConfig, OmegaConf
 
