@@ -5,11 +5,12 @@ import numpy as np
 tokenizer = T5Tokenizer.from_pretrained("t5-small")
 model = T5ForConditionalGeneration.from_pretrained("t5-small")
 
-text = "put carrot on plate"
+text = "put carrot on the plate please"
 
 input_ids = tokenizer(text, return_tensors="pt").input_ids
 outputs = model.generate(input_ids)
 print(tokenizer.decode(outputs[0], skip_special_tokens=True))
+# encoding = model(decoder_input_ids=input_ids)
 
 ## Get encoder
 

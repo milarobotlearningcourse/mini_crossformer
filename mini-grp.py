@@ -12,11 +12,14 @@ import cv2
 
 
 # data loading
-def get_batch_grp(split, dataset, batch_size):
+def get_batch_grp(split, cfg, dataset, batch_size):
     # generate a small batch of inputs x and targets y
     data = dataset['train'] if split == 'train' else dataset['test']
     ix = np.random.randint(int(len(data["img"])), size=(batch_size,))
     x = torch.tensor(data["img"][ix], dtype=torch.float)
+    # if cfg.dataset.encode_with_t5:
+    #     x_goal = torch.tensor(data["t5_language_embedding"][ix], dtype=torch.long)
+    # else:
     x_goal = torch.tensor(data["goal"][ix], dtype=torch.long)
     x_goal_img = torch.tensor(data["goal_img"][ix], dtype=torch.float)
     y = torch.tensor(data["action"][ix], dtype=torch.float)
@@ -30,7 +33,7 @@ def estimate_loss(model):
     for split in ['train', 'val']:
         losses = torch.zeros(model._cfg.eval_iters)
         for k in range(model._cfg.eval_iters):
-            X, x_goal, x_goal_img, Y = get_batch_grp(split, model._dataset, model._cfg.batch_size)
+            X, x_goal, x_goal_img, Y = get_batch_grp(split, model._cfg, model._dataset, model._cfg.batch_size)
             logits, loss = model(X, x_goal, x_goal_img, Y)
             losses[k] = loss.item()
         out[split] = losses.mean()
@@ -210,7 +213,10 @@ class GRP(nn.Module):
     """
     patches = get_patches_fast(images)
     patches_g = get_patches_fast(goal_imgs)
-    goals_e = self.token_embedding_table(goals_txt)
+    if self._cfg.dataset.encode_with_t5:
+        goals_e = goals_txt ## This is actually the embedding from the T5 model
+    else:
+        goals_e = self.token_embedding_table(goals_txt)
     
     # Running linear layer tokenization
     # Map the vector corresponding to each patch to the hidden size dimension
@@ -267,12 +273,10 @@ def my_main(cfg: DictConfig):
 
     dataset_tmp = {
         "img": np.array(dataset["img"]),
-        "action": np.concatenate((np.array(dataset["action"]) 
-                                ,np.array(dataset["rotation_delta"])
-                                ,np.array(dataset["open_gripper"])
-                                ), axis=1),
+        "action": np.concatenate((np.array(dataset["action"]) ,np.array(dataset["rotation_delta"])
+                                ,np.array(dataset["open_gripper"])), axis=1),
         "goal_img": np.array(dataset["goal_img"]),
-        "goal": dataset["goal"]
+        "goal": dataset["goal"] if cfg.dataset.encode_with_t5 else dataset["goal"]
     }
     shortest_text_len = min([len(txt) for txt in dataset["goal"]])
     cfg.block_size = shortest_text_len
@@ -317,14 +321,14 @@ def my_main(cfg: DictConfig):
             "img": torch.tensor(encode_state(dataset_tmp["img"][:n])).to(device),
             "action": torch.tensor(encode_action(dataset_tmp["action"][:n]), dtype=torch.float).to(device),            
             "goal_img": torch.tensor(encode_state(dataset_tmp["goal_img"][:n])).to(device),
-            "goal": torch.tensor([encode_txt(goal[:cfg.block_size]) for goal in dataset_tmp["goal"][:n]]).to(device)
+            "goal": torch.tensor([goal if cfg.dataset.encode_with_t5 else encode_txt(goal[:cfg.block_size]) for goal in dataset_tmp["goal"][:n]]).to(device)
             },
         "test": 
         {
             "img": torch.tensor(encode_state(dataset_tmp["img"][n:])).to(device),
             "action": torch.tensor(encode_action(dataset_tmp["action"][n:]), dtype=torch.float).to(device),            
             "goal_img": torch.tensor(encode_state(dataset_tmp["goal_img"][n:])).to(device),
-            "goal": torch.tensor([encode_txt(goal[:cfg.block_size]) for goal in dataset_tmp["goal"][n:]]).to(device)
+            "goal": torch.tensor([goal if cfg.dataset.encode_with_t5 else encode_txt(goal[:cfg.block_size]) for goal in dataset_tmp["goal"][n:]]).to(device)
         }
     }
 

@@ -2,6 +2,7 @@
 
 import hydra, json
 from omegaconf import DictConfig, OmegaConf
+from transformers import T5Tokenizer, T5ForConditionalGeneration
 
 @hydra.main(config_path="./conf", config_name="dataset")
 def my_main(cfg: DictConfig):
@@ -18,7 +19,11 @@ def my_main(cfg: DictConfig):
     builder = tfds.builder_from_directory(builder_dir=cfg.dataset.from_name)
     datasetRemote = builder.as_dataset(split='train[:' + str(cfg.dataset.num_episodes) + ']')
     dataset_tmp = {"img": [], "action": [], "goal": [], "goal_img": [],
-                    "rotation_delta": [], "open_gripper": [] }
+                    "rotation_delta": [], "open_gripper": [], "t5_language_embedding": [] }
+    
+    if cfg.dataset.encode_with_t5:
+        tokenizer = T5Tokenizer.from_pretrained("t5-small")
+        model = T5ForConditionalGeneration.from_pretrained("t5-small")
     for episode in datasetRemote:
         episode_ = {'steps': [] }
         episode = list(episode['steps'])
@@ -31,7 +36,12 @@ def my_main(cfg: DictConfig):
             dataset_tmp["rotation_delta"].append(episode[i]['action']['rotation_delta'])
             dataset_tmp["open_gripper"].append([np.array(episode[i]['action']['open_gripper'], dtype=np.uint8)])
             dataset_tmp["goal"].append(episode[i]['observation']['natural_language_instruction'].numpy().decode())
+            # dataset_tmp["goal_language_embedding"].append(episode[i]['observation']['natural_language_embedding'])
             dataset_tmp["goal_img"].append(Image.fromarray(goal_img.astype('uint8') ))
+            if cfg.dataset.encode_with_t5:
+                input_ids = tokenizer(episode[i]['observation']['natural_language_instruction'].numpy().decode(), return_tensors="pt").input_ids
+                dataset_tmp["t5_language_embedding"].append(model.encoder(input_ids).last_hidden_state)
+
 
     print("Dataset shape:", len(dataset_tmp["img"]))
     dataset = {}

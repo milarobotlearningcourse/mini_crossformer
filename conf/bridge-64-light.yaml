@@ -54,8 +54,9 @@ env:
 image_shape: [64, 64, 3]
 dataset: 
   from_name: "gs://gresearch/robotics/bridge/0.1.0/"
-  to_name: gberseth/mini-bridge-mini64px
+  to_name: gberseth/mini-bridge-full-64px-test
   num_episodes: 10
+  encode_with_t5: true
 trim: 1000000
 
 
