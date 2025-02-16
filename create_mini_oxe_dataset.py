@@ -22,8 +22,8 @@ def my_main(cfg: DictConfig):
                     "rotation_delta": [], "open_gripper": [], "t5_language_embedding": [] }
     
     if cfg.dataset.encode_with_t5:
-        tokenizer = T5Tokenizer.from_pretrained("t5-small")
-        model = T5ForConditionalGeneration.from_pretrained("t5-small")
+        tokenizer = T5Tokenizer.from_pretrained(cfg.dataset.t5_version)
+        model = T5ForConditionalGeneration.from_pretrained(cfg.dataset.t5_version)
     for episode in datasetRemote:
         episode_ = {'steps': [] }
         episode = list(episode['steps'])

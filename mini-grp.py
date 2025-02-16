@@ -347,8 +347,14 @@ def my_main(cfg: DictConfig):
         )
         wandb.run.log_code(".")
     model = GRP(dataset_tmp, cfg)
-    m = model.to(device)
-    print(sum(p.numel() for p in m.parameters())/1e6, 'M parameters')
+    model.to(device)
+    print(sum(p.numel() for p in model.parameters())/1e6, 'M parameters')
+
+    if cfg.dataset.encode_with_t5: ## Load T5 model
+        from transformers import T5Tokenizer, T5ForConditionalGeneration
+        tokenizer = T5Tokenizer.from_pretrained(cfg.dataset.t5_version)
+        text_model = T5ForConditionalGeneration.from_pretrained(cfg.dataset.t5_version)
+
 
     # create a PyTorch optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.learning_rate)
@@ -383,13 +389,19 @@ def my_main(cfg: DictConfig):
                     print("Instruction", instruction)
                     frames = []
                     done, truncated, timeLimit, t = False, False, 100, 0
+                    if cfg.dataset.encode_with_t5:
+                        input_ids = tokenizer(instruction, return_tensors="pt").input_ids
+                        txt_goal = np.array([text_model.encoder(input_ids).last_hidden_state.detach().numpy()[0][:cfg.block_size]]) ## All just to trim the tensor down to the min size in the dataset
+                    else:
+                        txt_goal = np.array([encode_txt(instruction)[:cfg.block_size]])
                     while not (done or truncated or (t > timeLimit)):
                         # action[:3]: delta xyz; action[3:6]: delta rotation in axis-angle representation;
                         # action[6:7]: gripper (the meaning of open / close depends on robot URDF)
                         image = get_image_from_maniskill2_obs_dict(env_unwrapped, obs)
                         image = image[:,:,:3] ## Remove last dimension of image color
+                        
                         action, loss = model.forward(torch.tensor(np.array([encode_state(resize_state(image))])).to(device)
-                                            ,torch.tensor(np.array([encode_txt(instruction)[:cfg.block_size]])).to(device) ## There can be issues here if th text is shorter than any example in the dataset
+                                            ,torch.tensor(txt_goal).to(device) ## There can be issues here if th text is shorter than any example in the dataset
                                             ,torch.tensor(np.array([encode_state(resize_state(image))])).to(device) ## Not the correct goal image... Should mask this.
                                             )
                         # action = env.action_space.sample() # replace this with your policy inference
@@ -415,7 +427,7 @@ def my_main(cfg: DictConfig):
                     wandb.log({"example": wandb.Video(log_dir+"/sim-env-"+str(iter)+".mp4")})
 
         # sample a batch of data
-        xb, xg, xgi, yb = get_batch_grp('train', dataset_tmp, cfg.batch_size)
+        xb, xg, xgi, yb = get_batch_grp('train', cfg, dataset_tmp, cfg.batch_size)
 
         # evaluate the loss
         logits, loss = model(xb, xg, xgi, yb)

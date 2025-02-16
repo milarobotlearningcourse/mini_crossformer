@@ -57,6 +57,8 @@ dataset:
   to_name: gberseth/mini-bridge-full-64px-test
   num_episodes: 10
   encode_with_t5: true
+  t5_version: "t5-small"
+  
 trim: 1000000
 
 
