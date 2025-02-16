@@ -17,10 +17,10 @@ def get_batch_grp(split, cfg, dataset, batch_size):
     data = dataset['train'] if split == 'train' else dataset['test']
     ix = np.random.randint(int(len(data["img"])), size=(batch_size,))
     x = torch.tensor(data["img"][ix], dtype=torch.float)
-    # if cfg.dataset.encode_with_t5:
-    #     x_goal = torch.tensor(data["t5_language_embedding"][ix], dtype=torch.long)
-    # else:
-    x_goal = torch.tensor(data["goal"][ix], dtype=torch.long)
+    if cfg.dataset.encode_with_t5:
+        x_goal = torch.tensor(data["goal"][ix], dtype=torch.float)
+    else:
+        x_goal = torch.tensor(data["goal"][ix], dtype=torch.long)
     x_goal_img = torch.tensor(data["goal_img"][ix], dtype=torch.float)
     y = torch.tensor(data["action"][ix], dtype=torch.float)
     return x, x_goal, x_goal_img, y
@@ -188,7 +188,6 @@ class GRP(nn.Module):
   def forward(self, images, goals_txt, goal_imgs, targets=None):
     # Dividing images into patches
     n, c, h, w = images.shape
-    B, T = goals_txt.shape
     # [TODO]
     """
     [DEFAULT]
@@ -215,8 +214,10 @@ class GRP(nn.Module):
     patches_g = get_patches_fast(goal_imgs)
     if self._cfg.dataset.encode_with_t5:
         goals_e = goals_txt ## This is actually the embedding from the T5 model
+        B, T, E = goals_txt.shape
     else:
         goals_e = self.token_embedding_table(goals_txt)
+        B, T = goals_txt.shape
     
     # Running linear layer tokenization
     # Map the vector corresponding to each patch to the hidden size dimension
@@ -276,21 +277,25 @@ def my_main(cfg: DictConfig):
         "action": np.concatenate((np.array(dataset["action"]) ,np.array(dataset["rotation_delta"])
                                 ,np.array(dataset["open_gripper"])), axis=1),
         "goal_img": np.array(dataset["goal_img"]),
-        "goal": dataset["goal"] if cfg.dataset.encode_with_t5 else dataset["goal"]
+        "goal": dataset["t5_language_embedding"] if cfg.dataset.encode_with_t5 else dataset["goal"]
     }
-    shortest_text_len = min([len(txt) for txt in dataset["goal"]])
-    cfg.block_size = shortest_text_len
 
     # here are all the unique characters that occur in this text
-    chars = sorted(list(set([item for row in dataset_tmp["goal"] for item in row]))) ## Flatten to a long string
-    cfg.vocab_size = len(chars)
-    # create a mapping from characters to integers
-    stoi = { ch:i for i,ch in enumerate(chars) }
-    itos = { i:ch for i,ch in enumerate(chars) }
-    encode_txt = lambda s: [stoi[c] for c in s] # text encoder to tokens: 
-    decode_txy = lambda l: ''.join([itos[i] for i in l]) # token decoder to text: 
-    print("vocab_size:", cfg.vocab_size)
-    print("example text encode:", encode_txt(dataset_tmp["goal"][0]))
+    if cfg.dataset.encode_with_t5:
+        shortest_text_len = min([len(txt[0]) for txt in dataset_tmp["goal"]])
+        cfg.block_size = shortest_text_len
+    else:
+        shortest_text_len = min([len(txt) for txt in dataset_tmp["goal"]])
+        cfg.block_size = shortest_text_len
+        chars = sorted(list(set([item for row in dataset_tmp["goal"] for item in row]))) ## Flatten to a long string
+        cfg.vocab_size = len(chars)
+        # create a mapping from characters to integers
+        stoi = { ch:i for i,ch in enumerate(chars) }
+        itos = { i:ch for i,ch in enumerate(chars) }
+        encode_txt = lambda s: [stoi[c] for c in s] # text encoder to tokens: 
+        decode_txy = lambda l: ''.join([itos[i] for i in l]) # token decoder to text: 
+        print("vocab_size:", cfg.vocab_size)
+        print("example text encode:", encode_txt(dataset_tmp["goal"][0]))
 
     # [TODO]
     """
@@ -321,14 +326,14 @@ def my_main(cfg: DictConfig):
             "img": torch.tensor(encode_state(dataset_tmp["img"][:n])).to(device),
             "action": torch.tensor(encode_action(dataset_tmp["action"][:n]), dtype=torch.float).to(device),            
             "goal_img": torch.tensor(encode_state(dataset_tmp["goal_img"][:n])).to(device),
-            "goal": torch.tensor([goal if cfg.dataset.encode_with_t5 else encode_txt(goal[:cfg.block_size]) for goal in dataset_tmp["goal"][:n]]).to(device)
+            "goal": torch.tensor([goal[0][:cfg.block_size] if cfg.dataset.encode_with_t5 else encode_txt(goal[:cfg.block_size]) for goal in dataset_tmp["goal"][:n]]).to(device)    
             },
         "test": 
         {
             "img": torch.tensor(encode_state(dataset_tmp["img"][n:])).to(device),
             "action": torch.tensor(encode_action(dataset_tmp["action"][n:]), dtype=torch.float).to(device),            
             "goal_img": torch.tensor(encode_state(dataset_tmp["goal_img"][n:])).to(device),
-            "goal": torch.tensor([goal if cfg.dataset.encode_with_t5 else encode_txt(goal[:cfg.block_size]) for goal in dataset_tmp["goal"][n:]]).to(device)
+            "goal": torch.tensor([goal[0][:cfg.block_size] if cfg.dataset.encode_with_t5 else encode_txt(goal[:cfg.block_size]) for goal in dataset_tmp["goal"][n:]]).to(device)
         }
     }
 

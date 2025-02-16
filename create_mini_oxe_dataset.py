@@ -44,13 +44,13 @@ def my_main(cfg: DictConfig):
 
 
     print("Dataset shape:", len(dataset_tmp["img"]))
-    dataset = {}
-    dataset["img"] = dataset_tmp["img"]
+    dataset = dataset_tmp
+    # dataset["img"] = dataset_tmp["img"]
     dataset["action"] = np.array(dataset_tmp["action"], dtype=np.float32)
     dataset["rotation_delta"] = np.array(dataset_tmp["rotation_delta"], dtype=np.float32)
     dataset["open_gripper"] = np.array(dataset_tmp["open_gripper"], dtype=np.uint8)
-    dataset["goal"] = dataset_tmp["goal"]
-    dataset["goal_img"] = dataset_tmp["goal_img"]
+    # dataset["goal"] = dataset_tmp["goal"]
+    # dataset["goal_img"] = dataset_tmp["goal_img"]
 
     ## Prepare dataset for push to huggingface
     from datasets import Dataset

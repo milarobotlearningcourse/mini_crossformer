@@ -29,7 +29,7 @@ eval_interval: 100
 learning_rate: 5e-5
 eval_iters: 200
 
-n_embd: 256
+n_embd: 512
 device: "cpu"
 testing: true
 simEval: true
