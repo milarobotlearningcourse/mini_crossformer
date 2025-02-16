@@ -159,7 +159,7 @@ class GRP(nn.Module):
     """
     self.patch_size = (self._cfg.image_shape[0] / self._cfg.n_patches, self._cfg.image_shape[1] / self._cfg.n_patches)
     #Positional embedding
-    self.register_buffer('positional_embeddings', calc_positional_embeddings(1 + self._cfg.n_patches ** 2 + self._cfg.block_size + self._cfg.n_patches ** 2, cfg.n_embd), persistent=False)
+    self.register_buffer('positional_embeddings', calc_positional_embeddings(1 + self._cfg.n_patches ** 2 + self._cfg.max_block_size + self._cfg.n_patches ** 2, cfg.n_embd), persistent=False)
 
     self.token_embedding_table = nn.Embedding(cfg.vocab_size, cfg.n_embd)
     self.class_tokens = nn.Parameter(torch.rand(1, cfg.n_embd))
@@ -282,11 +282,12 @@ def my_main(cfg: DictConfig):
 
     # here are all the unique characters that occur in this text
     if cfg.dataset.encode_with_t5:
-        shortest_text_len = min([len(txt[0]) for txt in dataset_tmp["goal"]])
-        cfg.block_size = shortest_text_len
+        # shortest_text_len = min([len(txt[0]) for txt in dataset_tmp["goal"]])
+        cfg.max_block_size = min(max([len(txt[0]) for txt in dataset_tmp["goal"]]), cfg.max_block_size)
+        # cfg.max_block_size = shortest_text_len
     else:
         shortest_text_len = min([len(txt) for txt in dataset_tmp["goal"]])
-        cfg.block_size = shortest_text_len
+        cfg.max_block_size = shortest_text_len
         chars = sorted(list(set([item for row in dataset_tmp["goal"] for item in row]))) ## Flatten to a long string
         cfg.vocab_size = len(chars)
         # create a mapping from characters to integers
@@ -320,20 +321,30 @@ def my_main(cfg: DictConfig):
     resize_state = lambda sf:   cv2.resize(np.array(sf, dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))  # resize state
 
     n = int(0.9*len(dataset_tmp["img"])) # first 90% will be train, rest val
+    goals = []
+    goals_eval = []
+    for goal in dataset_tmp["goal"][:n]:
+        goal_ = np.zeros((cfg.max_block_size,cfg.n_embd))
+        goal_[:len(goal[0]), :] = goal[0][:cfg.max_block_size] ## Overwrite just the zeros up to the size of this vector, smaller vectors will have < max_block_size
+        goals.append(goal_)
+    for goal in dataset_tmp["goal"][n:]:
+        goal_ = np.zeros((cfg.max_block_size,cfg.n_embd))
+        goal_[:len(goal[0]), :] = goal[0][:cfg.max_block_size] ## Overwrite just the zeros up to the size of this vector, smaller vectors will have < max_block_size
+        goals_eval.append(goal_)
     dataset_tmp = { 
         "train":
             {
             "img": torch.tensor(encode_state(dataset_tmp["img"][:n])).to(device),
             "action": torch.tensor(encode_action(dataset_tmp["action"][:n]), dtype=torch.float).to(device),            
             "goal_img": torch.tensor(encode_state(dataset_tmp["goal_img"][:n])).to(device),
-            "goal": torch.tensor([goal[0][:cfg.block_size] if cfg.dataset.encode_with_t5 else encode_txt(goal[:cfg.block_size]) for goal in dataset_tmp["goal"][:n]]).to(device)    
+            "goal": torch.tensor(goals).to(device)    
             },
         "test": 
         {
             "img": torch.tensor(encode_state(dataset_tmp["img"][n:])).to(device),
             "action": torch.tensor(encode_action(dataset_tmp["action"][n:]), dtype=torch.float).to(device),            
             "goal_img": torch.tensor(encode_state(dataset_tmp["goal_img"][n:])).to(device),
-            "goal": torch.tensor([goal[0][:cfg.block_size] if cfg.dataset.encode_with_t5 else encode_txt(goal[:cfg.block_size]) for goal in dataset_tmp["goal"][n:]]).to(device)
+            "goal": torch.tensor(goals_eval).to(device)
         }
     }
 
@@ -391,9 +402,12 @@ def my_main(cfg: DictConfig):
                     done, truncated, timeLimit, t = False, False, 100, 0
                     if cfg.dataset.encode_with_t5:
                         input_ids = tokenizer(instruction, return_tensors="pt").input_ids
-                        txt_goal = np.array([text_model.encoder(input_ids).last_hidden_state.detach().numpy()[0][:cfg.block_size]]) ## All just to trim the tensor down to the min size in the dataset
+                        txt_goal_ = np.array([text_model.encoder(input_ids).last_hidden_state.detach().numpy()[0][:cfg.max_block_size]]) ## All just to trim the tensor down to the min size in the dataset
+                        txt_goal = np.zeros((cfg.max_block_size,cfg.n_embd))
+                        txt_goal[:len(txt_goal_[0]), :] = txt_goal_
+                        txt_goal = [txt_goal]
                     else:
-                        txt_goal = np.array([encode_txt(instruction)[:cfg.block_size]])
+                        txt_goal = np.array([encode_txt(instruction)[:cfg.max_block_size]])
                     while not (done or truncated or (t > timeLimit)):
                         # action[:3]: delta xyz; action[3:6]: delta rotation in axis-angle representation;
                         # action[6:7]: gripper (the meaning of open / close depends on robot URDF)
@@ -401,7 +415,7 @@ def my_main(cfg: DictConfig):
                         image = image[:,:,:3] ## Remove last dimension of image color
                         
                         action, loss = model.forward(torch.tensor(np.array([encode_state(resize_state(image))])).to(device)
-                                            ,torch.tensor(txt_goal).to(device) ## There can be issues here if th text is shorter than any example in the dataset
+                                            ,torch.tensor(txt_goal, dtype=torch.float).to(device) ## There can be issues here if th text is shorter than any example in the dataset
                                             ,torch.tensor(np.array([encode_state(resize_state(image))])).to(device) ## Not the correct goal image... Should mask this.
                                             )
                         # action = env.action_space.sample() # replace this with your policy inference
