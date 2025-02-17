@@ -254,6 +254,10 @@ class GRP(nn.Module):
         loss = F.mse_loss(out, targets) ## B, C
     # [/TODO]
     return (out, loss)
+  
+
+def process_data(cfg):
+    pass
 
 import hydra, json
 from omegaconf import DictConfig, OmegaConf
