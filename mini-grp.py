@@ -263,7 +263,7 @@ import hydra, json
 from omegaconf import DictConfig, OmegaConf
 
 # @hydra.main(config_path="conf", config_name="grp-mini")
-@hydra.main(config_path="./conf", config_name="bridge-64-light")
+@hydra.main(config_path="./conf", config_name="bridge-64")
 def my_main(cfg: DictConfig):
     torch.manual_seed(cfg.r_seed)
     log_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
@@ -290,8 +290,6 @@ def my_main(cfg: DictConfig):
         cfg.max_block_size = min(max([len(txt[0]) for txt in dataset_tmp["goal"]]), cfg.max_block_size)
         # cfg.max_block_size = shortest_text_len
     else:
-        shortest_text_len = min([len(txt) for txt in dataset_tmp["goal"]])
-        cfg.max_block_size = shortest_text_len
         chars = sorted(list(set([item for row in dataset_tmp["goal"] for item in row]))) ## Flatten to a long string
         cfg.vocab_size = len(chars)
         # create a mapping from characters to integers
@@ -326,29 +324,30 @@ def my_main(cfg: DictConfig):
 
     n = int(0.9*len(dataset_tmp["img"])) # first 90% will be train, rest val
     goals = []
-    goals_eval = []
-    for goal in dataset_tmp["goal"][:n]:
-        goal_ = np.zeros((cfg.max_block_size,cfg.n_embd))
-        goal_[:len(goal[0]), :] = goal[0][:cfg.max_block_size] ## Overwrite just the zeros up to the size of this vector, smaller vectors will have < max_block_size
+    for goal in dataset_tmp["goal"]:
+        goal_ = np.zeros((cfg.max_block_size, cfg.n_embd)) if cfg.dataset.encode_with_t5 else " " * cfg.max_block_size
+        if cfg.dataset.encode_with_t5:
+            goal_[:len(goal[0]), :] = goal[0][:cfg.max_block_size] ## Overwrite just the zeros up to the size of this vector, smaller vectors will have < max_block_size
+        else:
+            goal_ = goal[:cfg.max_block_size] + goal_[len(goal):cfg.max_block_size] 
+            assert len(goal_) == cfg.max_block_size
         goals.append(goal_)
-    for goal in dataset_tmp["goal"][n:]:
-        goal_ = np.zeros((cfg.max_block_size,cfg.n_embd))
-        goal_[:len(goal[0]), :] = goal[0][:cfg.max_block_size] ## Overwrite just the zeros up to the size of this vector, smaller vectors will have < max_block_size
-        goals_eval.append(goal_)
     dataset_tmp = { 
         "train":
             {
             "img": torch.tensor(encode_state(dataset_tmp["img"][:n])).to(device),
             "action": torch.tensor(encode_action(dataset_tmp["action"][:n]), dtype=torch.float).to(device),            
             "goal_img": torch.tensor(encode_state(dataset_tmp["goal_img"][:n])).to(device),
-            "goal": torch.tensor(goals).to(device)    
+            # "goal": torch.tensor(goals).to(device)   
+            "goal": torch.tensor([encode_txt(goal) for goal in goals[:n]]).to(device)    
             },
         "test": 
         {
             "img": torch.tensor(encode_state(dataset_tmp["img"][n:])).to(device),
             "action": torch.tensor(encode_action(dataset_tmp["action"][n:]), dtype=torch.float).to(device),            
             "goal_img": torch.tensor(encode_state(dataset_tmp["goal_img"][n:])).to(device),
-            "goal": torch.tensor(goals_eval).to(device)
+            # "goal": torch.tensor(goals_eval).to(device)
+            "goal": torch.tensor([encode_txt(goal) for goal in goals[n:]], dtype=torch.uint8).to(device)     
         }
     }
 
@@ -419,7 +418,8 @@ def my_main(cfg: DictConfig):
                         image = image[:,:,:3] ## Remove last dimension of image color
                         
                         action, loss = model.forward(torch.tensor(np.array([encode_state(resize_state(image))])).to(device)
-                                            ,torch.tensor(txt_goal, dtype=torch.float).to(device) ## There can be issues here if th text is shorter than any example in the dataset
+                                            # ,torch.tensor(txt_goal, dtype=torch.float).to(device) ## There can be issues here if th text is shorter than any example in the dataset
+                                            ,torch.tensor(txt_goal, dtype=torch.long).to(device) ## There can be issues here if th text is shorter than any example in the dataset
                                             ,torch.tensor(np.array([encode_state(resize_state(image))])).to(device) ## Not the correct goal image... Should mask this.
                                             )
                         # action = env.action_space.sample() # replace this with your policy inference

@@ -3,6 +3,9 @@
 import hydra, json
 from omegaconf import DictConfig, OmegaConf
 from transformers import T5Tokenizer, T5ForConditionalGeneration
+## import python garbage collector
+import gc
+gc.enable()
 
 @hydra.main(config_path="./conf", config_name="dataset")
 def my_main(cfg: DictConfig):
@@ -17,30 +20,36 @@ def my_main(cfg: DictConfig):
     # Loading data
     # create RLDS dataset builder
     builder = tfds.builder_from_directory(builder_dir=cfg.dataset.from_name)
-    datasetRemote = builder.as_dataset(split='train[:' + str(cfg.dataset.num_episodes) + ']')
     dataset_tmp = {"img": [], "action": [], "goal": [], "goal_img": [],
-                    "rotation_delta": [], "open_gripper": [], "t5_language_embedding": [] }
-    
+                    "rotation_delta": [], "open_gripper": [] }
     if cfg.dataset.encode_with_t5:
         tokenizer = T5Tokenizer.from_pretrained(cfg.dataset.t5_version)
         model = T5ForConditionalGeneration.from_pretrained(cfg.dataset.t5_version)
-    for episode in datasetRemote:
-        episode_ = {'steps': [] }
-        episode = list(episode['steps'])
-        goal_img = cv2.resize(np.array(episode[-1]['observation']['image'], dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))  
-        for i in range(len(episode)): ## Resize images to reduce computation
-            # action = torch.as_tensor(action) # grab first dimention
-            obs = cv2.resize(np.array(episode[i]['observation']['image'], dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))
-            dataset_tmp["img"].append(Image.fromarray(obs.astype('uint8') ))
-            dataset_tmp["action"].append(episode[i]['action']['world_vector'])
-            dataset_tmp["rotation_delta"].append(episode[i]['action']['rotation_delta'])
-            dataset_tmp["open_gripper"].append([np.array(episode[i]['action']['open_gripper'], dtype=np.uint8)])
-            dataset_tmp["goal"].append(episode[i]['observation']['natural_language_instruction'].numpy().decode())
-            # dataset_tmp["goal_language_embedding"].append(episode[i]['observation']['natural_language_embedding'])
-            dataset_tmp["goal_img"].append(Image.fromarray(goal_img.astype('uint8') ))
-            if cfg.dataset.encode_with_t5:
-                input_ids = tokenizer(episode[i]['observation']['natural_language_instruction'].numpy().decode(), return_tensors="pt").input_ids
-                dataset_tmp["t5_language_embedding"].append(model.encoder(input_ids).last_hidden_state)
+        dataset_tmp["t5_language_embedding"] = [] 
+    
+    for c in range(0, cfg.dataset.num_episodes, cfg.dataset.chunk_size):
+
+        datasetRemote = builder.as_dataset(split='train[' + str(c) + ':' + str(c + cfg.dataset.chunk_size) + ']')
+        # print("loading dataset chunk:", c, "to", c + cfg.dataset.chunk_size)
+        gc.collect()
+
+        for episode in datasetRemote:
+            episode_ = {'steps': [] }
+            episode = list(episode['steps'])
+            goal_img = cv2.resize(np.array(episode[-1]['observation']['image'], dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))  
+            for i in range(len(episode)): ## Resize images to reduce computation
+                
+                obs = cv2.resize(np.array(episode[i]['observation']['image'], dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))
+                dataset_tmp["img"].append(Image.fromarray(obs.astype('uint8') ))
+                dataset_tmp["action"].append(episode[i]['action']['world_vector'])
+                dataset_tmp["rotation_delta"].append(episode[i]['action']['rotation_delta'])
+                dataset_tmp["open_gripper"].append([np.array(episode[i]['action']['open_gripper'], dtype=np.uint8)])
+                dataset_tmp["goal"].append(episode[i]['observation']['natural_language_instruction'].numpy().decode())
+                dataset_tmp["goal_img"].append(Image.fromarray(goal_img.astype('uint8') ))
+                
+                if cfg.dataset.encode_with_t5:
+                    input_ids = tokenizer(episode[i]['observation']['natural_language_instruction'].numpy().decode(), return_tensors="pt").input_ids
+                    dataset_tmp["t5_language_embedding"].append(model.encoder(input_ids).last_hidden_state)
 
 
     print("Dataset shape:", len(dataset_tmp["img"]))
@@ -63,7 +72,7 @@ def my_main(cfg: DictConfig):
     new_features["img"] = Image()
     ds.cast(new_features)
     print('Features:', ds.features)
-    ds.save_to_disk("datasets/" + cfg.dataset.to_name + ".hf")
+    # ds.save_to_disk("datasets/" + cfg.dataset.to_name + ".hf")
     ds.push_to_hub(cfg.dataset.to_name)
 
 
