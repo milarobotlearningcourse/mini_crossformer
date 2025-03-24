@@ -410,6 +410,7 @@ def my_main(cfg: DictConfig):
                         txt_goal[:len(txt_goal_[0]), :] = txt_goal_
                         txt_goal = [txt_goal]
                     else:
+                        instruction = instruction[:cfg.max_block_size] + str(" " * cfg.max_block_size)[len(instruction):cfg.max_block_size] ## padding the string length to block size.
                         txt_goal = np.array([encode_txt(instruction)[:cfg.max_block_size]])
                     while not (done or truncated or (t > timeLimit)):
                         # action[:3]: delta xyz; action[3:6]: delta rotation in axis-angle representation;
