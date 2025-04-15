@@ -263,7 +263,7 @@ import hydra, json
 from omegaconf import DictConfig, OmegaConf
 
 # @hydra.main(config_path="conf", config_name="grp-mini")
-@hydra.main(config_path="./conf", config_name="bridge-64")
+@hydra.main(config_path="./conf", config_name="bridge-64-light")
 def my_main(cfg: DictConfig):
     torch.manual_seed(cfg.r_seed)
     log_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
@@ -393,6 +393,7 @@ def my_main(cfg: DictConfig):
             print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
             if not cfg.testing:
                 wandb.log({"train loss": losses['train'], "val loss": losses['val']})
+            # torch.save(model, "./miniGRP.pth")
 
             if cfg.simEval and (iter % cfg.eval_vid_iters == 0): ## Do this eval infrequently because it takes a fiar bit of compute
                 rewards = []
