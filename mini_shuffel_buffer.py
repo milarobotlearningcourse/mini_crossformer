@@ -102,7 +102,8 @@ class CircularBuffer:
         y = torch.tensor(data["action"][ix], dtype=torch.float, device=cfg.device)
         return x, x_goal, x_goal_img, y
     
-    def shuffle(self):
+    def shuffle(self, num):
+        print("num", num)
         start_ = self._dataset_indecies["gs://gresearch/robotics/bridge/0.1.0/"]
         get_dataset_portion(self._builder, self, start_, start_+1, self._cfg)
 
@@ -143,7 +144,7 @@ def get_dataset_portion(builder, cbuffer, start, end, cfg):
                             # rotation_delta=episode[i]['action']['rotation_delta'], 
                             # language_instruction=episode[i]['observation']['natural_language_instruction'].numpy().decode()
                             )
-
+    print("Fini le minlange")
 
     return cbuffer
 

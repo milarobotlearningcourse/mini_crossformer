@@ -56,7 +56,6 @@ data_shuffel_interval: 1000
 dataset: 
   from_name: "gs://gresearch/robotics/bridge/0.1.0/"
   to_name: gberseth/mini-bridge-full-64px-test
-  starting_episode: 11
   num_episodes: 3
   chunk_size: 1
   buffer_size: 5000
@@ -65,7 +64,7 @@ dataset:
   chars_list:  [' ', ',', '.', '4', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'O', 'P', 'R', 'S', 'T', 'U', 'V', 'W', 'Y', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y']
   load_dataset: true
   dataset_indicies: {
-    "gs://gresearch/robotics/bridge/0.1.0/": 10,
+    "gs://gresearch/robotics/bridge/0.1.0/": 11,
   }
   
 trim: 1000000

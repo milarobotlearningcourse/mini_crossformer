@@ -247,6 +247,7 @@ def process_data(cfg):
 import hydra, json
 from omegaconf import DictConfig, OmegaConf
 from mini_shuffel_buffer import CircularBuffer, get_dataset_portion
+import threading
 
 def preprocess_data(cfg, device):
     from datasets import load_dataset, load_from_disk
@@ -286,6 +287,9 @@ def my_main(cfg: DictConfig):
     import torch.optim.lr_scheduler as lr_scheduler
     scheduler = lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.1, total_iters=cfg.max_iters)
 
+    data_thread = threading.Thread(target=cBuffer.shuffle, args=([34],))
+    data_thread.start()
+
     for iter in range(cfg.max_iters):
 
         if iter % cfg.eval_interval == 0 or iter == cfg.max_iters - 1:
@@ -298,8 +302,10 @@ def my_main(cfg: DictConfig):
 
         if iter % cfg.data_shuffel_interval == 0 and iter > 0:
             ## Update the dataset
-            cBuffer.shuffle()
+            # cBuffer.shuffle()
+            data_thread.join()
             print("Shuffling dataset...")
+            data_thread.start()
             # get_dataset_portion(builder, cBuffer, 0, cfg.dataset.num_episodes, cfg)
 
 
