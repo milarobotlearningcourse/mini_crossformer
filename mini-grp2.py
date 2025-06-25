@@ -281,7 +281,8 @@ def preprocess_data(cfg, device):
         cfg.max_block_size = min(max([len(txt[0]) for txt in dataset_tmp["goal"]]), cfg.max_block_size)
         # cfg.max_block_size = shortest_text_len
     else:
-        chars = sorted(list(set([item for row in dataset_tmp["goal"] for item in row]))) ## Flatten to a long string
+        chars = cfg.dataset.chars_list
+        print("chars", chars)
         cfg.vocab_size = len(chars)
         # create a mapping from characters to integers
         stoi = { ch:i for i,ch in enumerate(chars) }
@@ -299,11 +300,7 @@ def preprocess_data(cfg, device):
     
     [/DEFAULT]
     """
-    if cfg.load_action_bounds == True:
-        a_std, a_mean = cfg.env.action_std, cfg.env.action_mean
-        a_std[6] = cfg.env.gripper_closed_std
-    else:
-        a_std, a_mean = (dataset_tmp["action"].std(axis=0) + 0.001) * 1.5, dataset_tmp["action"].mean(axis=0)
+    a_std, a_mean = cfg.env.action_std, cfg.env.action_mean
     cfg.action_bins = len(a_mean)
     encode_action = lambda af:   (((af - a_mean)/(a_std))).astype(np.float32) # encoder: take a float, output an integer
     decode_action = lambda binN: (binN * a_std) + a_mean  # Undo mapping to [-1, 1]
@@ -313,35 +310,8 @@ def preprocess_data(cfg, device):
     encode_state = lambda af:   ((af/(255.0)*2.0)-1.0).astype(np.float32) # encoder: take a float, output an integer
     resize_state = lambda sf:   cv2.resize(np.array(sf, dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))  # resize state
 
-    n = int(0.9*len(dataset_tmp["img"])) # first 90% will be train, rest val
-    goals = []
-    for goal in dataset_tmp["goal"]:
-        goal_ = np.zeros((cfg.max_block_size, cfg.n_embd)) if cfg.dataset.encode_with_t5 else " " * cfg.max_block_size
-        if cfg.dataset.encode_with_t5:
-            goal_[:len(goal[0]), :] = goal[0][:cfg.max_block_size] ## Overwrite just the zeros up to the size of this vector, smaller vectors will have < max_block_size
-        else:
-            goal_ = goal[:cfg.max_block_size] + goal_[len(goal):cfg.max_block_size] 
-            assert len(goal_) == cfg.max_block_size
-        goals.append(goal_)
-    dataset_tmp = { 
-        "train":
-            {
-            "img": torch.tensor(encode_state(dataset_tmp["img"][:n])).to(device),
-            "action": torch.tensor(encode_action(dataset_tmp["action"][:n]), dtype=torch.float).to(device),            
-            "goal_img": torch.tensor(encode_state(dataset_tmp["goal_img"][:n])).to(device),
-            # "goal": torch.tensor(goals).to(device)   
-            "goal": torch.tensor([encode_txt(goal) for goal in goals[:n]]).to(device)    
-            },
-        "test": 
-        {
-            "img": torch.tensor(encode_state(dataset_tmp["img"][n:])).to(device),
-            "action": torch.tensor(encode_action(dataset_tmp["action"][n:]), dtype=torch.float).to(device),            
-            "goal_img": torch.tensor(encode_state(dataset_tmp["goal_img"][n:])).to(device),
-            # "goal": torch.tensor(goals_eval).to(device)
-            "goal": torch.tensor([encode_txt(goal) for goal in goals[n:]], dtype=torch.uint8).to(device)     
-        }
-    }
-    return dataset_tmp, encode_txt, decode_txy, encode_action, decode_action, encode_state, resize_state, a_std, a_mean
+
+    return dataset_tmp, encode_action, decode_action, encode_state, resize_state
 
 
 # @hydra.main(config_path="conf", config_name="grp-mini")
@@ -364,16 +334,10 @@ def my_main(cfg: DictConfig):
         )
         wandb.run.log_code(".")
 
-    dataset_tmp, encode_txt, decode_txy, encode_action, decode_action, encode_state, resize_state, a_std, a_mean = preprocess_data(cfg, device)
+    dataset_tmp, encode_action, decode_action, encode_state, resize_state = preprocess_data(cfg, device)
     model = GRP(dataset_tmp, cfg)
     model.to(device)
     print(sum(p.numel() for p in model.parameters())/1e6, 'M parameters')
-
-    if cfg.dataset.encode_with_t5: ## Load T5 model
-        from transformers import T5Tokenizer, T5ForConditionalGeneration
-        tokenizer = T5Tokenizer.from_pretrained(cfg.dataset.t5_version)
-        text_model = T5ForConditionalGeneration.from_pretrained(cfg.dataset.t5_version)
-
 
     # create a PyTorch optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.learning_rate)

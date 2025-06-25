@@ -21,7 +21,7 @@ experiment:
   project: mini-grp
   
 batch_size: 128 # how many independent sequences will we process in parallel?
-block_size: 32 ## Will be overidden by code
+max_block_size: 12 ## Will be overidden by code
 vocab_size: 32 ## Will be overidden by code
 n_patches: 8
 max_iters: 20000
@@ -54,10 +54,14 @@ env:
 image_shape: [64, 64, 3]
 dataset: 
   from_name: "gs://gresearch/robotics/bridge/0.1.0/"
-  to_name: gberseth/bridge-data-64px-shuffel-test
-  num_episodes: 10
-  chunk_size: 5
+  to_name: gberseth/mini-bridge-full-64px-test
+  starting_episode: 11
+  num_episodes: 3
+  chunk_size: 1
+  buffer_size: 5000
   encode_with_t5: false
   t5_version: "t5-small"
+  chars_list:  [' ', ',', '.', '4', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'O', 'P', 'R', 'S', 'T', 'U', 'V', 'W', 'Y', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y']
+  load_dataset: true
   
 trim: 1000000
