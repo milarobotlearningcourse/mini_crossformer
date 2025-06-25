@@ -287,8 +287,8 @@ def my_main(cfg: DictConfig):
     import torch.optim.lr_scheduler as lr_scheduler
     scheduler = lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.1, total_iters=cfg.max_iters)
 
-    data_thread = threading.Thread(target=cBuffer.shuffle, args=([34],))
-    data_thread.start()
+    # data_thread = threading.Thread(target=cBuffer.shuffle, args=([34],))
+    # data_thread.start()
 
     for iter in range(cfg.max_iters):
 
@@ -303,11 +303,11 @@ def my_main(cfg: DictConfig):
         if iter % cfg.data_shuffel_interval == 0 and iter > 0:
             ## Update the dataset
             # cBuffer.shuffle()
-            print("Waiting for data thread to finish...")
-            data_thread.join()
-            print("Shuffling dataset...")
-            data_thread.start()
-            # get_dataset_portion(builder, cBuffer, 0, cfg.dataset.num_episodes, cfg)
+            # print("Waiting for data thread to finish...")
+            # data_thread.join()
+            # print("Shuffling dataset...")
+            # data_thread.start()
+            cBuffer.shuffle(34)
 
 
         xb, xg, xgi, yb = cBuffer.get_batch_grp('train', cfg, cfg.batch_size)
