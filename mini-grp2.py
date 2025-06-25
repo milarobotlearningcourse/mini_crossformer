@@ -303,6 +303,7 @@ def my_main(cfg: DictConfig):
         if iter % cfg.data_shuffel_interval == 0 and iter > 0:
             ## Update the dataset
             # cBuffer.shuffle()
+            print("Waiting for data thread to finish...")
             data_thread.join()
             print("Shuffling dataset...")
             data_thread.start()
