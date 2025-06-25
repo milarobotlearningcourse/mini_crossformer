@@ -20,6 +20,8 @@ def my_main(cfg: DictConfig):
     # Loading data
     # create RLDS dataset builder
     builder = tfds.builder_from_directory(builder_dir=cfg.dataset.from_name)
+    info = builder.info
+    print(f"Total number of examples (from loaded info): {info.splits.total_num_examples}")
     dataset_tmp = {"img": [], "action": [], "goal": [], "goal_img": [],
                     "rotation_delta": [], "open_gripper": [] }
     if cfg.dataset.encode_with_t5:

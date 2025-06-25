@@ -33,6 +33,10 @@ class CircularBuffer:
             self._dataset_tmp["t5_language_embedding"] = [] 
 
         self._builder = tfds.builder_from_directory(builder_dir=cfg.dataset.from_name)
+        ## Get the size of the dataset from the builder
+        # info = self._builder
+        # print(f"Total number of examples (from loaded info): {info.splits.total_num_examples}")
+        # self._max_size = info.splits.total_num_examples
 
         chars = cfg.dataset.chars_list
         print("chars", chars)
@@ -102,11 +106,20 @@ class CircularBuffer:
         y = torch.tensor(data["action"][ix], dtype=torch.float, device=cfg.device)
         return x, x_goal, x_goal_img, y
     
-    def shuffle(self, num):
-        print("num", num)
-        start_ = self._dataset_indecies["gs://gresearch/robotics/bridge/0.1.0/"]
-        get_dataset_portion(self._builder, self, start_, start_ + self._cfg.dataset.chunk_size, self._cfg)
-        start_ = self._dataset_indecies["gs://gresearch/robotics/bridge/0.1.0/"] = start_ + self._cfg.dataset.chunk_size
+    def shuffle(self, shared_queue):
+        print("num", shared_queue)
+        while True:
+            data = shared_queue.get() ## Update the data when messaged from the Queue
+            if data is None:
+                break
+            start_ = self._dataset_indecies["gs://gresearch/robotics/bridge/0.1.0/"]["start"]
+            ## Call function to swap out a portion of data.
+            get_dataset_portion(self._builder, self, start_, 
+                                start_ + self._cfg.dataset.chunk_size, self._cfg)
+            start_ = self._dataset_indecies["gs://gresearch/robotics/bridge/0.1.0/"]["start"] = start_ + self._cfg.dataset.chunk_size
+            print("start_, end_, max_size", start_, start_ + self._cfg.dataset.chunk_size, self._dataset_indecies["gs://gresearch/robotics/bridge/0.1.0/"]["size"])
+            if start_ >= self._dataset_indecies["gs://gresearch/robotics/bridge/0.1.0/"]["size"]: ## If we have reached the end of the dataset, reset the start index
+                self._dataset_indecies["gs://gresearch/robotics/bridge/0.1.0/"] = 0
 
 def get_dataset_portion(builder, cbuffer, start, end, cfg):
     """

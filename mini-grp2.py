@@ -248,6 +248,7 @@ import hydra, json
 from omegaconf import DictConfig, OmegaConf
 from mini_shuffel_buffer import CircularBuffer, get_dataset_portion
 import threading
+from queue import Queue
 
 def preprocess_data(cfg, device):
     from datasets import load_dataset, load_from_disk
@@ -265,7 +266,6 @@ def my_main(cfg: DictConfig):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print("Using device: ", device, f"({torch.cuda.get_device_name(device)})" if torch.cuda.is_available() else "")
     cfg.device = device
-    builder = tfds.builder_from_directory(builder_dir=cfg.dataset.from_name)
 
     if not cfg.testing:
         import wandb
@@ -287,8 +287,9 @@ def my_main(cfg: DictConfig):
     import torch.optim.lr_scheduler as lr_scheduler
     scheduler = lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.1, total_iters=cfg.max_iters)
 
-    # data_thread = threading.Thread(target=cBuffer.shuffle, args=([34],))
-    # data_thread.start()
+    shared_queue = Queue(maxsize=1)
+    data_thread = threading.Thread(target=cBuffer.shuffle, args=(shared_queue,))
+    data_thread.start()
 
     for iter in range(cfg.max_iters):
 
@@ -307,7 +308,8 @@ def my_main(cfg: DictConfig):
             # data_thread.join()
             # print("Shuffling dataset...")
             # data_thread.start()
-            cBuffer.shuffle(34)
+            shared_queue.put('shuffle')
+            # cBuffer.shuffle(34)
 
 
         xb, xg, xgi, yb = cBuffer.get_batch_grp('train', cfg, cfg.batch_size)
@@ -322,6 +324,9 @@ def my_main(cfg: DictConfig):
 
     if not cfg.testing:
         wandb.finish()
+    shared_queue.put(None)
+    data_thread.join()
+
     return losses['val']
 
 if __name__ == "__main__":
