@@ -42,8 +42,8 @@ r_seed: 1337
 n_head: 16
 n_blocks: 4
 dropout: 0.2
-action_bins: 10
-action_dim: 6
+action_bins: 7
+action_dim: 7
 load_action_bounds: true
 env:
   action_std: [0.016753544993060053, 0.023366538587021844, 0.020825098821764754, 0.04094312200887319, 0.0450425630283353, 0.07591476573186073, 1.0]
@@ -52,6 +52,7 @@ env:
 
 ## Model hyperparameters
 image_shape: [64, 64, 3]
+data_shuffel_interval: 1000
 dataset: 
   from_name: "gs://gresearch/robotics/bridge/0.1.0/"
   to_name: gberseth/mini-bridge-full-64px-test
@@ -63,5 +64,8 @@ dataset:
   t5_version: "t5-small"
   chars_list:  [' ', ',', '.', '4', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'O', 'P', 'R', 'S', 'T', 'U', 'V', 'W', 'Y', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y']
   load_dataset: true
+  dataset_indicies: {
+    "gs://gresearch/robotics/bridge/0.1.0/": 10,
+  }
   
 trim: 1000000

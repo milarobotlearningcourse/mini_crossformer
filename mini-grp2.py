@@ -11,21 +11,6 @@ from tqdm import tqdm, trange
 import cv2
 
 
-# data loading
-def get_batch_grp(split, cfg, dataset, batch_size):
-    # generate a small batch of inputs x and targets y
-    data = dataset['train'] if split == 'train' else dataset['test']
-    ix = np.random.randint(int(len(data["img"])), size=(batch_size,))
-    x = torch.tensor(data["img"][ix], dtype=torch.float)
-    if cfg.dataset.encode_with_t5:
-        x_goal = torch.tensor(data["goal"][ix], dtype=torch.float)
-    else:
-        x_goal = torch.tensor(data["goal"][ix], dtype=torch.long)
-    x_goal_img = torch.tensor(data["goal_img"][ix], dtype=torch.float)
-    y = torch.tensor(data["action"][ix], dtype=torch.float)
-    return x, x_goal, x_goal_img, y
-
-
 @torch.no_grad()
 def estimate_loss(model):
     out = {}
@@ -33,7 +18,7 @@ def estimate_loss(model):
     for split in ['train', 'val']:
         losses = torch.zeros(model._cfg.eval_iters)
         for k in range(model._cfg.eval_iters):
-            X, x_goal, x_goal_img, Y = get_batch_grp(split, model._cfg, model._dataset, model._cfg.batch_size)
+            X, x_goal, x_goal_img, Y = model._dataset.get_batch_grp(split, model._cfg, model._cfg.batch_size)
             logits, loss = model(X, x_goal, x_goal_img, Y)
             losses[k] = loss.item()
         out[split] = losses.mean()
@@ -261,61 +246,17 @@ def process_data(cfg):
 
 import hydra, json
 from omegaconf import DictConfig, OmegaConf
+from mini_shuffel_buffer import CircularBuffer, get_dataset_portion
 
 def preprocess_data(cfg, device):
     from datasets import load_dataset, load_from_disk
-    dataset = load_dataset(cfg.dataset.to_name, split='train')
-    print('Features:', dataset.features)
+    cbuffer = CircularBuffer(cfg.dataset.buffer_size, cfg)
 
-    dataset_tmp = {
-        "img": np.array(dataset["img"]),
-        "action": np.concatenate((np.array(dataset["action"]) ,np.array(dataset["rotation_delta"])
-                                ,np.array(dataset["open_gripper"])), axis=1),
-        "goal_img": np.array(dataset["goal_img"]),
-        "goal": dataset["t5_language_embedding"] if cfg.dataset.encode_with_t5 else dataset["goal"]
-    }
-
-    # here are all the unique characters that occur in this text
-    if cfg.dataset.encode_with_t5:
-        # shortest_text_len = min([len(txt[0]) for txt in dataset_tmp["goal"]])
-        cfg.max_block_size = min(max([len(txt[0]) for txt in dataset_tmp["goal"]]), cfg.max_block_size)
-        # cfg.max_block_size = shortest_text_len
-    else:
-        chars = cfg.dataset.chars_list
-        print("chars", chars)
-        cfg.vocab_size = len(chars)
-        # create a mapping from characters to integers
-        stoi = { ch:i for i,ch in enumerate(chars) }
-        itos = { i:ch for i,ch in enumerate(chars) }
-        encode_txt = lambda s: [stoi[c] for c in s] # text encoder to tokens: 
-        decode_txy = lambda l: ''.join([itos[i] for i in l]) # token decoder to text: 
-        print("vocab_size:", cfg.vocab_size)
-        print("example text encode:", encode_txt(dataset_tmp["goal"][0]))
-
-    # [TODO]
-    """
-    [DEFAULT]
-    # TODO: 
-    ## Provide the logic for the GRP policy for discretized or continuous actions
-    
-    [/DEFAULT]
-    """
-    a_std, a_mean = cfg.env.action_std, cfg.env.action_mean
-    cfg.action_bins = len(a_mean)
-    encode_action = lambda af:   (((af - a_mean)/(a_std))).astype(np.float32) # encoder: take a float, output an integer
-    decode_action = lambda binN: (binN * a_std) + a_mean  # Undo mapping to [-1, 1]
-    # [/TODO]
-
-    ## Get the actions and encode them to map to [-1, 1]
-    encode_state = lambda af:   ((af/(255.0)*2.0)-1.0).astype(np.float32) # encoder: take a float, output an integer
-    resize_state = lambda sf:   cv2.resize(np.array(sf, dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))  # resize state
-
-
-    return dataset_tmp, encode_action, decode_action, encode_state, resize_state
+    return cbuffer
 
 
 # @hydra.main(config_path="conf", config_name="grp-mini")
-@hydra.main(config_path="./conf", config_name="bridge-64-light")
+@hydra.main(config_path="./conf", config_name="dataset-shuffle")
 def my_main(cfg: DictConfig):
     torch.manual_seed(cfg.r_seed)
     log_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
@@ -323,6 +264,7 @@ def my_main(cfg: DictConfig):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print("Using device: ", device, f"({torch.cuda.get_device_name(device)})" if torch.cuda.is_available() else "")
     cfg.device = device
+    builder = tfds.builder_from_directory(builder_dir=cfg.dataset.from_name)
 
     if not cfg.testing:
         import wandb
@@ -334,8 +276,8 @@ def my_main(cfg: DictConfig):
         )
         wandb.run.log_code(".")
 
-    dataset_tmp, encode_action, decode_action, encode_state, resize_state = preprocess_data(cfg, device)
-    model = GRP(dataset_tmp, cfg)
+    cBuffer = preprocess_data(cfg, device)
+    model = GRP(cBuffer, cfg)
     model.to(device)
     print(sum(p.numel() for p in model.parameters())/1e6, 'M parameters')
 
@@ -353,9 +295,15 @@ def my_main(cfg: DictConfig):
                 wandb.log({"train loss": losses['train'], "val loss": losses['val']})
             # torch.save(model, "./miniGRP.pth")
 
-            
-        # sample a batch of data
-        xb, xg, xgi, yb = get_batch_grp('train', cfg, dataset_tmp, cfg.batch_size)
+
+        if iter % cfg.data_shuffel_interval == 0 and iter > 0:
+            ## Update the dataset
+            cBuffer.shuffle()
+            print("Shuffling dataset...")
+            # get_dataset_portion(builder, cBuffer, 0, cfg.dataset.num_episodes, cfg)
+
+
+        xb, xg, xgi, yb = cBuffer.get_batch_grp('train', cfg, cfg.batch_size)
 
         # evaluate the loss
         logits, loss = model(xb, xg, xgi, yb)

@@ -16,6 +16,7 @@ class CircularBuffer:
     The buffer is initialized with a size and a configuration object.
     """
     def __init__(self, size, cfg):
+        import tensorflow_datasets as tfds
         self._size = size
         self._cfg = cfg
         self._index = 0
@@ -30,6 +31,8 @@ class CircularBuffer:
             self._tokenizer = T5Tokenizer.from_pretrained(self._cfg.dataset.t5_version)
             self._model = T5ForConditionalGeneration.from_pretrained(self._cfg.dataset.t5_version)
             self._dataset_tmp["t5_language_embedding"] = [] 
+
+        self._builder = tfds.builder_from_directory(builder_dir=cfg.dataset.from_name)
 
         chars = cfg.dataset.chars_list
         print("chars", chars)
@@ -61,6 +64,7 @@ class CircularBuffer:
                           language_instruction=dataset["language_instruction"][i] if cfg.dataset.encode_with_t5 else None)
                 # self.add(dataset_tmp["img"][i], , goal, goal_img, language_instruction)
             print("Loaded dataset with size:", self._count)
+        self._dataset_indecies = self._cfg.dataset.dataset_indicies
 
     def add(self, obs, action, goal, goal_img, language_instruction=None):
         """ Add an observation, action, goal, goal image, rotation delta, and open gripper state to the buffer."""
@@ -89,14 +93,18 @@ class CircularBuffer:
         # data = dataset['train'] if split == 'train' else dataset['test']
         data = self._dataset_tmp
         ix = np.random.randint(min(self._count, self._size), size=(batch_size,))
-        x = torch.tensor(data["img"][ix], dtype=torch.float)
+        x = torch.tensor(data["img"][ix], dtype=torch.float, device=cfg.device)
         if cfg.dataset.encode_with_t5:
-            x_goal = torch.tensor(data["goal"][ix], dtype=torch.float)
+            x_goal = torch.tensor(data["goal"][ix], dtype=torch.float, device=cfg.device)
         else:
-            x_goal = torch.tensor(data["goal"][ix], dtype=torch.long)
-        x_goal_img = torch.tensor(data["goal_img"][ix], dtype=torch.float)
-        y = torch.tensor(data["action"][ix], dtype=torch.float)
+            x_goal = torch.tensor(data["goal"][ix], dtype=torch.long, device=cfg.device)
+        x_goal_img = torch.tensor(data["goal_img"][ix], dtype=torch.float, device=cfg.device)
+        y = torch.tensor(data["action"][ix], dtype=torch.float, device=cfg.device)
         return x, x_goal, x_goal_img, y
+    
+    def shuffle(self):
+        start_ = self._dataset_indecies["gs://gresearch/robotics/bridge/0.1.0/"]
+        get_dataset_portion(self._builder, self, start_, start_+1, self._cfg)
 
 def get_dataset_portion(builder, cbuffer, start, end, cfg):
     """
@@ -120,7 +128,6 @@ def get_dataset_portion(builder, cbuffer, start, end, cfg):
         gc.collect()
 
         for episode in datasetRemote:
-            episode_ = {'steps': [] }
             episode = list(episode['steps'])
             goal_img = cv2.resize(np.array(episode[-1]['observation']['image'], dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))  
             for i in range(len(episode)): ## Resize images to reduce computation
@@ -130,7 +137,8 @@ def get_dataset_portion(builder, cbuffer, start, end, cfg):
                             action = np.concatenate((episode[i]['action']['world_vector'], 
                                                     episode[i]['action']['rotation_delta'], 
                                                     [np.array(episode[i]['action']['open_gripper'], dtype=np.uint8)]), axis=0).astype(np.float32), 
-                            goal=episode[i]['action']['rotation_delta'],
+                            goal= episode[i]['observation']['natural_language_instruction'].numpy().decode(),
+                            # goal=episode[i]['observation']['natural_language_instruction'],
                             goal_img=goal_img,
                             # rotation_delta=episode[i]['action']['rotation_delta'], 
                             # language_instruction=episode[i]['observation']['natural_language_instruction'].numpy().decode()
@@ -151,9 +159,9 @@ def my_main(cfg: DictConfig):
     # Loading data
     # create RLDS dataset builder
     cbuffer = CircularBuffer(cfg.dataset.buffer_size, cfg)
-    builder = tfds.builder_from_directory(builder_dir=cfg.dataset.from_name)
     for i in range(cfg.dataset.starting_episode, cfg.dataset.num_episodes, cfg.dataset.chunk_size):
-        get_dataset_portion(builder, cbuffer, 0, cfg.dataset.num_episodes, cfg)
+        # get_dataset_portion(builder, cbuffer, 0, cfg.dataset.num_episodes, cfg)
+        cbuffer.shuffle()
         print("Dataset shape:", len(cbuffer._dataset_tmp["img"]))
         print("Dataset len:", len(cbuffer._count))
 
