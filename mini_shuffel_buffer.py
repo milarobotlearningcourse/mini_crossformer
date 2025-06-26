@@ -112,14 +112,14 @@ class CircularBuffer:
             data = shared_queue.get() ## Update the data when messaged from the Queue
             if data is None:
                 break
-            start_ = self._dataset_indecies["gs://gresearch/robotics/bridge/0.1.0/"]["start"]
+            start_ = self._dataset_indecies[self._cfg.dataset.from_name]["start"]
             ## Call function to swap out a portion of data.
             get_dataset_portion(self._builder, self, start_, 
                                 start_ + self._cfg.dataset.chunk_size, self._cfg)
-            start_ = self._dataset_indecies["gs://gresearch/robotics/bridge/0.1.0/"]["start"] = start_ + self._cfg.dataset.chunk_size
-            print("start_, end_, max_size", start_, start_ + self._cfg.dataset.chunk_size, self._dataset_indecies["gs://gresearch/robotics/bridge/0.1.0/"]["size"])
-            if start_ >= self._dataset_indecies["gs://gresearch/robotics/bridge/0.1.0/"]["size"]: ## If we have reached the end of the dataset, reset the start index
-                self._dataset_indecies["gs://gresearch/robotics/bridge/0.1.0/"] = 0
+            start_ = self._dataset_indecies[self._cfg.dataset.from_name]["start"] = start_ + self._cfg.dataset.chunk_size
+            print("start_, end_, max_size", start_, start_ + self._cfg.dataset.chunk_size, self._dataset_indecies[self._cfg.dataset.from_name]["size"])
+            if start_ >= self._dataset_indecies[self._cfg.dataset.from_name]["size"]: ## If we have reached the end of the dataset, reset the start index
+                self._dataset_indecies[self._cfg.dataset.from_name] = 0
 
 def get_dataset_portion(builder, cbuffer, start, end, cfg):
     """

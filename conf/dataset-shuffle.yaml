@@ -52,12 +52,12 @@ env:
 
 ## Model hyperparameters
 image_shape: [64, 64, 3]
-data_shuffel_interval: 100
+data_shuffel_interval: 500
 dataset: 
   from_name: "gs://gresearch/robotics/bridge/0.1.0/"
   to_name: gberseth/mini-bridge-full-64px-test
-  num_episodes: 2
-  chunk_size: 2
+  num_episodes: 5
+  chunk_size: 5
   buffer_size: 5000
   encode_with_t5: false
   t5_version: "t5-small"
