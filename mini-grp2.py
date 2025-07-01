@@ -281,6 +281,11 @@ def my_main(cfg: DictConfig):
     model = GRP(cBuffer, cfg)
     model.to(device)
     print(sum(p.numel() for p in model.parameters())/1e6, 'M parameters')
+    ## Print the amount of memory used by the model
+    print("Memory used by the model:", torch.cuda.memory_allocated(device) / 1e6, "MB")
+    ## Print the amount of memory used by the dataset cBuffer
+    from pympler import asizeof
+    print("Memory used by the dataset cBuffer:", asizeof.asizeof(cBuffer) / 1e6, "MB")
 
     # create a PyTorch optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.learning_rate)
@@ -295,7 +300,7 @@ def my_main(cfg: DictConfig):
 
         if iter % cfg.eval_interval == 0 or iter == cfg.max_iters - 1:
             losses = estimate_loss(model)
-            print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+            print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, memory {torch.cuda.memory_allocated(device) / 1e6:.2f} MB")
             if not cfg.testing:
                 wandb.log({"train loss": losses['train'], "val loss": losses['val']})
             # torch.save(model, "./miniGRP.pth")

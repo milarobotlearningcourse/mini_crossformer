@@ -54,17 +54,18 @@ env:
 image_shape: [64, 64, 3]
 data_shuffel_interval: 500
 dataset: 
-  from_name: "gs://gresearch/robotics/bridge/0.1.0/"
+  from_name: "/network/datasets/openxembodiment/datasets/bridge/0.1.0/"
   to_name: gberseth/mini-bridge-full-64px-test
   num_episodes: 5
   chunk_size: 5
-  buffer_size: 5000
+  buffer_size: 50000
   encode_with_t5: false
   t5_version: "t5-small"
   chars_list:  [' ', ',', '.', '4', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'O', 'P', 'R', 'S', 'T', 'U', 'V', 'W', 'Y', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y']
   load_dataset: true
   dataset_indicies: {
-    "gs://gresearch/robotics/bridge/0.1.0/": {"start": 11, size: 28935},
+    "/network/datasets/openxembodiment/datasets/bridge/0.1.0/": {"start": 11, size: 28935, weight: 1.0},
+    "/network/datasets/openxembodiment/datasets/language_table/0.0.1": {"start": 0, size: 1000000, weight: 1.0}  
   }
   
 trim: 1000000

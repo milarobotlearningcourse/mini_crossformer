@@ -145,6 +145,7 @@ def get_dataset_portion(builder, cbuffer, start, end, cfg):
         for episode in datasetRemote:
             episode = list(episode['steps'])
             goal_img = cv2.resize(np.array(episode[-1]['observation']['image'], dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))  
+            print("Ajout de", len(episode), "données à la circular buffer.")
             for i in range(len(episode)): ## Resize images to reduce computation
                 
                 obs = cv2.resize(np.array(episode[i]['observation']['image'], dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))
