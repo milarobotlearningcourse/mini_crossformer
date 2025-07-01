@@ -321,7 +321,7 @@ def my_main(cfg: DictConfig):
     data_thread.join()
 
     return losses['val']
-
+ 
 if __name__ == "__main__":
     results = my_main()
     print("results:", results)
