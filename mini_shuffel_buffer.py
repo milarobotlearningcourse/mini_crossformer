@@ -21,10 +21,11 @@ class CircularBuffer:
         self._cfg = cfg
         self._index = 0
         self._count = 0
-        self._dataset_tmp = {"img": np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), 
-                             "action": np.zeros(shape=(self._size, len(self._cfg.env.action_std)),),
-                             "goal": np.zeros(shape=(self._size, self._cfg.max_block_size)), 
-                             "goal_img": np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)),
+        self._dataset_tmp = {"img": 
+                             torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.float, device=self._cfg.device), 
+                             "action": torch.tensor(np.zeros(shape=(self._size, len(self._cfg.env.action_std)),), dtype=torch.float, device=self._cfg.device),
+                             "goal": torch.tensor(np.zeros(shape=(self._size, self._cfg.max_block_size)), dtype=torch.float, device=self._cfg.device), 
+                             "goal_img": torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.float, device=self._cfg.device),
                     # "rotation_delta": [], "open_gripper": [] 
                     }
         if self._cfg.dataset.encode_with_t5:
@@ -73,8 +74,8 @@ class CircularBuffer:
     def add(self, obs, action, goal, goal_img, language_instruction=None):
         """ Add an observation, action, goal, goal image, rotation delta, and open gripper state to the buffer."""
     
-        self._dataset_tmp["img"][self._index] = obs
-        self._dataset_tmp["action"][self._index] = action
+        self._dataset_tmp["img"][self._index] = torch.tensor(obs, dtype=torch.float, device=self._cfg.device)
+        self._dataset_tmp["action"][self._index] = torch.tensor(action, dtype=torch.float, device=self._cfg.device)
         ## Make goal embeddings of a fixed length and fill in the earlier chunks with the true goal data
         goal_ = np.zeros((self._cfg.max_block_size, self._cfg.n_embd)) if self._cfg.dataset.encode_with_t5 else " " * self._cfg.max_block_size
         if self._cfg.dataset.encode_with_t5:
@@ -82,13 +83,13 @@ class CircularBuffer:
         else:
             goal_ = goal[:self._cfg.max_block_size] + goal_[len(goal):self._cfg.max_block_size] 
             assert len(goal_) == self._cfg.max_block_size
-        self._dataset_tmp["goal"][self._index] = self._encode_txt(goal_)
-        self._dataset_tmp["goal_img"][self._index] = goal_img
+        self._dataset_tmp["goal"][self._index] = torch.tensor(self._encode_txt(goal_), dtype=torch.float, device=self._cfg.device)
+        self._dataset_tmp["goal_img"][self._index] = torch.tensor(goal_img, dtype=torch.float, device=self._cfg.device)
         # self._dataset_tmp["rotation_delta"][self._index] = rotation_delta
         # self._dataset_tmp["open_gripper"][self._index] = open_gripper
         if self._cfg.dataset.encode_with_t5:
             input_ids = self._tokenizer(language_instruction, return_tensors="pt").input_ids
-            self._dataset_tmp["t5_language_embedding"][self._index] = self._model.encoder(input_ids).last_hidden_state
+            self._dataset_tmp["t5_language_embedding"][self._index] = torch.tensor(self._model.encoder(input_ids).last_hidden_state, dtype=torch.float, device=self._cfg.device)
         self._count += 1
         self._index = (self._index + 1) % self._size
 
