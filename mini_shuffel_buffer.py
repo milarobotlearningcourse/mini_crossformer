@@ -33,7 +33,9 @@ class CircularBuffer:
             self._model = T5ForConditionalGeneration.from_pretrained(self._cfg.dataset.t5_version)
             self._dataset_tmp["t5_language_embedding"] = [] 
 
-        self._builder = tfds.builder_from_directory(builder_dir=cfg.dataset.from_name)
+        self._builders = {}
+        for dataset_name in self._cfg.dataset.dataset_indicies:
+            self._builders[dataset_name] = tfds.builder_from_directory(builder_dir=dataset_name)
         ## Get the size of the dataset from the builder
         # info = self._builder
         # print(f"Total number of examples (from loaded info): {info.splits.total_num_examples}")
@@ -115,14 +117,9 @@ class CircularBuffer:
                 break
             start_ = self._dataset_indecies[self._cfg.dataset.from_name]["start"]
             ## Call function to swap out a portion of data.
-            get_dataset_portion(self._builder, self, start_, 
-                                start_ + self._cfg.dataset.chunk_size, self._cfg)
-            start_ = self._dataset_indecies[self._cfg.dataset.from_name]["start"] = start_ + self._cfg.dataset.chunk_size
-            print("start_, end_, max_size", start_, start_ + self._cfg.dataset.chunk_size, self._dataset_indecies[self._cfg.dataset.from_name]["size"])
-            if start_ >= self._dataset_indecies[self._cfg.dataset.from_name]["size"]: ## If we have reached the end of the dataset, reset the start index
-                self._dataset_indecies[self._cfg.dataset.from_name] = 0
+            get_multi_dataset_portion(self._builders, self, self._cfg)
 
-def get_dataset_portion(builder, cbuffer, start, end, cfg):
+def get_dataset_portion(builder, cbuffer, start, end, cfg, dataset_name=None):
     """
     Helper function to get a portion of the dataset.
     """
@@ -136,33 +133,60 @@ def get_dataset_portion(builder, cbuffer, start, end, cfg):
     # Train and test splits
     # Loading data
     # create RLDS dataset builder
-    
     for c in range(start, end, cfg.dataset.chunk_size):
-
         datasetRemote = builder.as_dataset(split='train[' + str(c) + ':' + str(c + cfg.dataset.chunk_size) + ']')
         # print("loading dataset chunk:", c, "to", c + cfg.dataset.chunk_size)
         gc.collect()
-
         for episode in datasetRemote:
             episode = list(episode['steps'])
-            goal_img = cv2.resize(np.array(episode[-1]['observation']['image'], dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))  
-            print("Ajout de", len(episode), "données à la circular buffer.")
+            goal_img = cv2.resize(np.array(episode[-1]['observation'][cfg.dataset.dataset_indicies[dataset_name]["image_key"]], dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))  
+            # print("Ajout de", len(episode), "données à la circular buffer.")
             for i in range(len(episode)): ## Resize images to reduce computation
                 
-                obs = cv2.resize(np.array(episode[i]['observation']['image'], dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))
+                obs = cv2.resize(np.array(episode[i]['observation'][cfg.dataset.dataset_indicies[dataset_name]["image_key"]], dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))
                 cbuffer.add(obs = obs, 
                             action = np.concatenate((episode[i]['action']['world_vector'], 
                                                     episode[i]['action']['rotation_delta'], 
-                                                    [np.array(episode[i]['action']['open_gripper'], dtype=np.uint8)]), axis=0).astype(np.float32), 
-                            goal= episode[i]['observation']['natural_language_instruction'].numpy().decode(),
+                                                    np.reshape(
+                                                        np.array(episode[i]['action'][cfg.dataset.dataset_indicies[dataset_name]["action_key"]], dtype=np.uint8), 
+                                                        newshape=(1,)
+                                                        )), axis=0
+                                                    ).astype(np.float32), 
+                            goal= episode[i]['observation'][cfg.dataset.dataset_indicies[dataset_name]["text_key"]].numpy().decode(),
                             # goal=episode[i]['observation']['natural_language_instruction'],
                             goal_img=goal_img,
                             # rotation_delta=episode[i]['action']['rotation_delta'], 
                             # language_instruction=episode[i]['observation']['natural_language_instruction'].numpy().decode()
                             )
     print("A terminé le mélange.")
-
     return cbuffer
+
+def get_multi_dataset_portion(builders, cbuffer, cfg):
+    """
+    Helper function to get a portion of the dataset.
+    """
+    import tensorflow_datasets as tfds
+    import numpy as np
+    from tqdm import tqdm, trange
+    import cv2
+    # from PIL import Image
+    from datasets import load_dataset
+    # ------------
+    # Train and test splits
+    # Loading data
+    # create RLDS dataset builder
+    for dataset_name, builder in builders.items():
+        print("Loading dataset:", dataset_name)
+        start = cfg.dataset.dataset_indicies[dataset_name]["start"]
+        end = start + int(cfg.dataset.chunk_size * cfg.dataset.dataset_indicies[dataset_name]["weight"])
+        print("start:", start, "end:", end, "dataset_name:", dataset_name)
+        # start_ = cbuffer._dataset_indecies[cbuffer._cfg.dataset.from_name]["start"] = start_ + cbuffer._cfg.dataset.chunk_size
+        print("start_", start, " end_", end, " size_ ", cbuffer._dataset_indecies[cbuffer._cfg.dataset.from_name]["size"]
+                , " count_", cbuffer._count, " index_", cbuffer._index)
+        if start >= cbuffer._dataset_indecies[cbuffer._cfg.dataset.from_name]["size"]: ## If we have reached the end of the dataset, reset the start index
+            cbuffer._dataset_indecies[cbuffer._cfg.dataset.from_name] = 0
+        get_dataset_portion(builders[dataset_name], cbuffer, start, end, cfg, dataset_name=dataset_name)
+        
 
 @hydra.main(config_path="./conf", config_name="dataset-shuffle")
 def my_main(cfg: DictConfig):
