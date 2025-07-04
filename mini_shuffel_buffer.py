@@ -8,6 +8,7 @@ import gc
 gc.enable()
 import numpy as np
 import torch
+import cv2
 
 # from openvla.prismatic.vla.datasets.rlds.oxe import transforms as transforms
 
@@ -83,11 +84,11 @@ class CircularBuffer:
         self._cfg = cfg
         self._index = 0
         self._count = 0
-        self._dataset_tmp = {"img": 
-                             torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.float, device=self._cfg.device), 
+        self._dataset_tmp = {
+                            "img": torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.uint8, device=self._cfg.device), 
                              "action": torch.tensor(np.zeros(shape=(self._size, len(self._cfg.env.action_std)),), dtype=torch.float, device=self._cfg.device),
                              "goal": torch.tensor(np.zeros(shape=(self._size, self._cfg.max_block_size)), dtype=torch.float, device=self._cfg.device), 
-                             "goal_img": torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.float, device=self._cfg.device),
+                             "goal_img": torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.uint8, device=self._cfg.device),
                     # "rotation_delta": [], "open_gripper": [] 
                     }
         if self._cfg.dataset.encode_with_t5:
@@ -112,6 +113,10 @@ class CircularBuffer:
         self._encode_txt = lambda s: [stoi[c] for c in s] # text encoder to tokens: 
         self._decode_txy = lambda l: ''.join([itos[i] for i in l]) # token decoder to text: 
         print("vocab_size:", cfg.vocab_size)
+
+            ## Get the actions and encode them to map to [-1, 1]
+        self._encode_state = lambda af:   ((af/(255.0)*2.0)-1.0) # encoder: take a float, output an integer
+        self._resize_state = lambda sf:   cv2.resize(np.array(sf, dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))  # resize state
         # print("example text encode:", encode_txt(dataset_tmp["goal"][0]))
 
         if self._cfg.dataset.load_dataset:
@@ -138,7 +143,7 @@ class CircularBuffer:
     def add(self, obs, action, goal, goal_img, language_instruction=None):
         """ Add an observation, action, goal, goal image, rotation delta, and open gripper state to the buffer."""
     
-        self._dataset_tmp["img"][self._index] = torch.tensor(obs, dtype=torch.float, device=self._cfg.device)
+        self._dataset_tmp["img"][self._index] = torch.tensor(obs, dtype=torch.uint8, device=self._cfg.device)
         self._dataset_tmp["action"][self._index] = torch.tensor(action, dtype=torch.float, device=self._cfg.device)
         ## Make goal embeddings of a fixed length and fill in the earlier chunks with the true goal data
         goal_ = np.zeros((self._cfg.max_block_size, self._cfg.n_embd)) if self._cfg.dataset.encode_with_t5 else " " * self._cfg.max_block_size
@@ -148,7 +153,7 @@ class CircularBuffer:
             goal_ = goal[:self._cfg.max_block_size] + goal_[len(goal):self._cfg.max_block_size] 
             assert len(goal_) == self._cfg.max_block_size
         self._dataset_tmp["goal"][self._index] = torch.tensor(self._encode_txt(goal_), dtype=torch.float, device=self._cfg.device)
-        self._dataset_tmp["goal_img"][self._index] = torch.tensor(goal_img, dtype=torch.float, device=self._cfg.device)
+        self._dataset_tmp["goal_img"][self._index] = torch.tensor(goal_img, dtype=torch.uint8, device=self._cfg.device)
         # self._dataset_tmp["rotation_delta"][self._index] = rotation_delta
         # self._dataset_tmp["open_gripper"][self._index] = open_gripper
         if self._cfg.dataset.encode_with_t5:
@@ -162,12 +167,12 @@ class CircularBuffer:
         # data = dataset['train'] if split == 'train' else dataset['test']
         data = self._dataset_tmp
         ix = np.random.randint(min(self._count, self._size), size=(batch_size,))
-        x = torch.tensor(data["img"][ix], dtype=torch.float, device=cfg.device)
+        x = torch.tensor(self._encode_state(data["img"][ix]), dtype=torch.float, device=cfg.device)
         if cfg.dataset.encode_with_t5:
             x_goal = torch.tensor(data["goal"][ix], dtype=torch.float, device=cfg.device)
         else:
             x_goal = torch.tensor(data["goal"][ix], dtype=torch.long, device=cfg.device)
-        x_goal_img = torch.tensor(data["goal_img"][ix], dtype=torch.float, device=cfg.device)
+        x_goal_img = torch.tensor(self._encode_state(data["goal_img"][ix]), dtype=torch.float, device=cfg.device)
         y = torch.tensor(data["action"][ix], dtype=torch.float, device=cfg.device)
         return x, x_goal, x_goal_img, y
     
@@ -180,6 +185,24 @@ class CircularBuffer:
             start_ = self._dataset_indecies[self._cfg.dataset.from_name]["start"]
             ## Call function to swap out a portion of data.
             get_multi_dataset_portion(self._builders, self, self._cfg)
+
+    def save(self, path):
+        """
+        Save the dataset to a file.
+        """
+        ## Prepare dataset for push to huggingface
+        from datasets import Dataset
+        import datasets
+        from datasets import Image
+
+        ds = Dataset.from_dict(self._dataset_tmp)
+
+        new_features = ds.features.copy()
+        new_features["img"] = Image()
+        ds.cast(new_features)
+        print('Features:', ds.features)
+        # ds.save_to_disk("datasets/" + cfg.dataset.to_name + ".hf")
+        ds.push_to_hub(self._cfg.dataset.to_name)
 
 def get_dataset_portion(builder, cbuffer, start, end, cfg, dataset_name=None):
     """
