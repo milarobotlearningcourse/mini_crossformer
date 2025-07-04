@@ -325,6 +325,8 @@ def my_main(cfg: DictConfig):
         )
         wandb.run.log_code(".")
 
+    tokenizer = None
+    text_model = None
     if cfg.dataset.encode_with_t5: ## Load T5 model
         from transformers import T5Tokenizer, T5ForConditionalGeneration
         tokenizer = T5Tokenizer.from_pretrained(cfg.dataset.t5_version)
@@ -367,8 +369,8 @@ def my_main(cfg: DictConfig):
             if not cfg.testing:
                 wandb.log({"train loss": losses['train'], "val loss": losses['val']})
             # torch.save(model, "./miniGRP.pth")
-            if cfg.simEval and (iter % cfg.eval_vid_iters == 0): ## Do this eval infrequently because it takes a fiar bit of compute
-                eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, cBuffer, tokenizer, text_model=text_model)
+        if cfg.simEval and (iter % cfg.eval_vid_iters == 0): ## Do this eval infrequently because it takes a fiar bit of compute
+            eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, cBuffer, tokenizer, text_model=text_model)
 
 
         if iter % cfg.data_shuffel_interval == 0 and iter > 0:

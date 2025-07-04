@@ -110,6 +110,10 @@ class CircularBuffer:
         self._resize_state = lambda sf:   cv2.resize(np.array(sf, dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))  # resize state
         # print("example text encode:", encode_txt(dataset_tmp["goal"][0]))
 
+        cfg.action_bins = len(cfg.env.action_mean)
+        self._encode_action = lambda af:   (((af - cfg.env.action_mean)/(cfg.env.action_std))).astype(np.float32) # encoder: take a float, output an integer
+        self._decode_action = lambda binN: (binN * cfg.env.action_std) + cfg.env.action_mean  # Undo mapping to [-1, 1]
+
         if self._cfg.dataset.load_dataset:
             # Load the dataset from a file
             import datasets
