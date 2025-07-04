@@ -21,15 +21,6 @@ def bridge_oxe_dataset_transform(trajectory):
     trajectory = trajectory[1:]  # Remove the first timestep with all-zero action
 
     for i in range(0, len(trajectory)):
-        # trajectory[i]["action"] = np.concatenate(
-        #     (
-        #         trajectory[i]["action"]["world_vector"],
-        #         trajectory[i]["action"]["rotation_delta"],
-        #         trajectory[i]["action"]["open_gripper"][:, None],
-        #     ),
-        #     axis=-1,
-        # )
-
         trajectory[i]["action"] = np.concatenate((trajectory[i]['action']['world_vector'], 
                                                     trajectory[i]['action']['rotation_delta'], 
                                                         [trajectory[i]['action']['open_gripper']], 

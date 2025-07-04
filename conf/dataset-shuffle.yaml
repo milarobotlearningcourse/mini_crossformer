@@ -30,10 +30,10 @@ learning_rate: 5e-5
 eval_iters: 200
 
 n_embd: 256
-device: "cpu"
-testing: true
-simEval: true
-eval_vid_iters: 1000
+device: "gpu"
+testing: false
+simEval: false
+eval_vid_iters: 100
 gradient_accumulation_steps: 2
 
 # ------------
