@@ -81,11 +81,13 @@ class CircularBuffer:
                              "goal": torch.tensor(np.zeros(shape=(self._size, self._cfg.max_block_size)), dtype=torch.float, device=self._cfg.device), 
                              "goal_img": torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.uint8, device=self._cfg.device),
                     # "rotation_delta": [], "open_gripper": [] 
-                    }
+                            "t5_language_embedding": torch.tensor(np.zeros(shape=(self._size, self._cfg.max_block_size, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device) if self._cfg.dataset.encode_with_t5 else None
+                            } 
+                    
         if self._cfg.dataset.encode_with_t5:
             self._tokenizer = T5Tokenizer.from_pretrained(self._cfg.dataset.t5_version)
             self._model = T5ForConditionalGeneration.from_pretrained(self._cfg.dataset.t5_version)
-            self._dataset_tmp["t5_language_embedding"] = torch.tensor(np.zeros(shape=(self._size, self._cfg.max_block_size, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device),  
+            # self._dataset_tmp["t5_language_embedding"] = torch.tensor(np.zeros(shape=(self._size, self._cfg.max_block_size, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device)[0],  
 
         self._builders = {}
         for dataset_name in self._cfg.dataset.dataset_indicies:
@@ -101,7 +103,7 @@ class CircularBuffer:
         # create a mapping from characters to integers
         stoi = { ch:i for i,ch in enumerate(chars) }
         itos = { i:ch for i,ch in enumerate(chars) }
-        self._encode_txt = lambda s: [stoi[c] for c in s] if cfg.dataset.encode_with_t5 == False else s # text encoder to tokens: 
+        self._encode_txt = lambda s: [stoi[c] for c in s] # text encoder to tokens: 
         self._decode_txy = lambda l: ''.join([itos[i] for i in l]) # token decoder to text: 
         print("vocab_size:", cfg.vocab_size)
 
@@ -144,22 +146,17 @@ class CircularBuffer:
         ## Make goal embeddings of a fixed length and fill in the earlier chunks with the true goal data
         
         if self._cfg.dataset.encode_with_t5:
-            goal_ = np.zeros((self._cfg.max_block_size, self._cfg.n_embd))
+            goal__ = np.zeros((self._cfg.max_block_size, self._cfg.n_embd))
             input_ids = self._tokenizer(goal, return_tensors="pt").input_ids
-            goal = (self._model.encoder(input_ids).last_hidden_state).detach().cpu().numpy() ## Get the goal embedding
-            goal_[:len(goal[0]), :] = goal[0][:self._cfg.max_block_size] ## Overwrite just the zeros up to the size of this vector, smaller vectors will have < max_block_size
-            self._dataset_tmp["t5_language_embedding"][self._index] = torch.tensor(goal_, dtype=torch.float, device=self._cfg.device)
+            goal_t = self._model.encoder(input_ids).last_hidden_state.detach().cpu().numpy() ## Get the goal embedding
+            goal__[:len(goal_t[0]), :] = goal_t[0][:self._cfg.max_block_size] ## Overwrite just the zeros up to the size of this vector, smaller vectors will have < max_block_size
+            self._dataset_tmp["t5_language_embedding"][self._index] = torch.tensor(goal__, dtype=torch.float, device=self._cfg.device)
         
         goal_ = " " * self._cfg.max_block_size
         goal_ = goal[:self._cfg.max_block_size] + goal_[len(goal):self._cfg.max_block_size] 
         # assert len(goal_) == self._cfg.max_block_size
         self._dataset_tmp["goal"][self._index] = torch.tensor(self._encode_txt(goal_), dtype=torch.float, device=self._cfg.device)
         self._dataset_tmp["goal_img"][self._index] = torch.tensor(goal_img, dtype=torch.uint8, device=self._cfg.device)
-        # self._dataset_tmp["rotation_delta"][self._index] = rotation_delta
-        # self._dataset_tmp["open_gripper"][self._index] = open_gripper
-        if self._cfg.dataset.encode_with_t5:
-            input_ids = self._tokenizer(language_instruction, return_tensors="pt").input_ids
-            self._dataset_tmp["t5_language_embedding"][self._index] = torch.tensor(self._model.encoder(input_ids).last_hidden_state, dtype=torch.float, device=self._cfg.device)
         self._count += 1
         self._index = (self._index + 1) % self._size
 
