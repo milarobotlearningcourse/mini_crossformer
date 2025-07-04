@@ -241,7 +241,7 @@ class GRP(nn.Module):
     return (out, loss)
   
 def eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, buffer,
-                      wandb, tokenizer=None, text_model=None):
+                      wandb, iter_, tokenizer=None, text_model=None):
     from simpler_env.utils.env.observation_utils import get_image_from_maniskill2_obs_dict
     print("Evaluating model in sim environment")
 
@@ -288,9 +288,9 @@ def eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, buffer,
         wandb.log({"avg reward": np.mean(rewards)})
     import moviepy.editor as mpy
     clip = mpy.ImageSequenceClip(list(frames), fps=20)
-    clip.write_videofile(log_dir+"/sim-env-"+str(iter)+".mp4", fps=20)
+    clip.write_videofile(log_dir+"/sim-env-"+str(iter_)+".mp4", fps=20)
     if not cfg.testing:
-        wandb.log({"example": wandb.Video(log_dir+"/sim-env-"+str(iter)+".mp4")})
+        wandb.log({"example": wandb.Video(log_dir+"/sim-env-"+str(iter_)+".mp4")})
 
 import hydra, json
 from omegaconf import DictConfig, OmegaConf
@@ -315,6 +315,7 @@ def my_main(cfg: DictConfig):
     print("Using device: ", device, f"({torch.cuda.get_device_name(device)})" if torch.cuda.is_available() else "")
     cfg.device = device
 
+    wandb = None
     if not cfg.testing:
         import wandb
         # start a new wandb run to track this script
@@ -370,7 +371,8 @@ def my_main(cfg: DictConfig):
                 wandb.log({"train loss": losses['train'], "val loss": losses['val']})
             # torch.save(model, "./miniGRP.pth")
         if cfg.simEval and (iter % cfg.eval_vid_iters == 0): ## Do this eval infrequently because it takes a fiar bit of compute
-            eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, cBuffer, tokenizer, text_model=text_model)
+            eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, 
+                              cBuffer, wandb=wandb, iter_=iter, tokenizer=tokenizer, text_model=text_model)
 
 
         if iter % cfg.data_shuffel_interval == 0 and iter > 0:
