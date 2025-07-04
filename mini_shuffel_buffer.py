@@ -9,6 +9,8 @@ gc.enable()
 import numpy as np
 import torch
 
+from openvla.prismatic.vla.datasets.rlds.oxe import transforms as transforms
+
 class CircularBuffer:
     """ A circular buffer impolimented using a collection of numpy arrays.
     The buffer stores images, actions, goals, goal images, rotation deltas, and open gripper states.
@@ -139,20 +141,16 @@ def get_dataset_portion(builder, cbuffer, start, end, cfg, dataset_name=None):
         gc.collect()
         for episode in datasetRemote:
             episode = list(episode['steps'])
-            goal_img = cv2.resize(np.array(episode[-1]['observation'][cfg.dataset.dataset_indicies[dataset_name]["image_key"]], dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))  
+            ## https://github.com/openvla/openvla/blob/main/prismatic/vla/datasets/rlds/oxe/transforms.py
+            episode = transforms.OXE_STANDARDIZATION_TRANSFORMS[cfg.dataset.dataset_indicies[dataset_name]["dataset_key"]](episode)
+            goal_img = cv2.resize(np.array(episode[-1]['observation']["image"], dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))  
             # print("Ajout de", len(episode), "données à la circular buffer.")
             for i in range(len(episode)): ## Resize images to reduce computation
                 
-                obs = cv2.resize(np.array(episode[i]['observation'][cfg.dataset.dataset_indicies[dataset_name]["image_key"]], dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))
+                obs = cv2.resize(np.array(episode[i]['observation']["image"], dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))
                 cbuffer.add(obs = obs, 
-                            action = np.concatenate((episode[i]['action']['world_vector'], 
-                                                    episode[i]['action']['rotation_delta'], 
-                                                    np.reshape(
-                                                        np.array(episode[i]['action'][cfg.dataset.dataset_indicies[dataset_name]["action_key"]], dtype=np.uint8), 
-                                                        newshape=(1,)
-                                                        )), axis=0
-                                                    ).astype(np.float32), 
-                            goal= episode[i]['observation'][cfg.dataset.dataset_indicies[dataset_name]["text_key"]].numpy().decode(),
+                            action = episode[i]['action'] * cfg.dataset.dataset_indicies[dataset_name]["scale"], 
+                            goal= episode[i]['observation']["image"].numpy().decode(),
                             # goal=episode[i]['observation']['natural_language_instruction'],
                             goal_img=goal_img,
                             # rotation_delta=episode[i]['action']['rotation_delta'], 
@@ -200,9 +198,11 @@ def my_main(cfg: DictConfig):
     # Loading data
     # create RLDS dataset builder
     cbuffer = CircularBuffer(cfg.dataset.buffer_size, cfg)
-    for i in range(cfg.dataset.starting_episode, cfg.dataset.num_episodes, cfg.dataset.chunk_size):
+    for i in range(0, cfg.dataset.num_episodes, cfg.dataset.chunk_size):
         # get_dataset_portion(builder, cbuffer, 0, cfg.dataset.num_episodes, cfg)
-        cbuffer.shuffle()
+        # cbuffer.shuffle()
+        ## Call function to swap out a portion of data.
+        get_multi_dataset_portion(cbuffer._builders, cbuffer, cbuffer._cfg)
         print("Dataset shape:", len(cbuffer._dataset_tmp["img"]))
         print("Dataset len:", len(cbuffer._count))
 
