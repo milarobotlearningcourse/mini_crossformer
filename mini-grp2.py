@@ -306,7 +306,7 @@ def preprocess_data(cfg, device):
 
 
 # @hydra.main(config_path="conf", config_name="grp-mini")
-@hydra.main(config_path="./conf", config_name="dataset-shuffle")
+@hydra.main(config_path="./conf", config_name="mix-64")
 def my_main(cfg: DictConfig):
     torch.manual_seed(cfg.r_seed)
     log_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
