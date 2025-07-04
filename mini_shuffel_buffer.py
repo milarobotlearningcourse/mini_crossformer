@@ -11,6 +11,66 @@ import torch
 
 from openvla.prismatic.vla.datasets.rlds.oxe import transforms as transforms
 
+def bridge_oxe_dataset_transform(trajectory):
+    """
+    Applies to version of Bridge V2 in Open X-Embodiment mixture.
+
+    Note =>> In original Bridge V2 dataset, the first timestep has an all-zero action, so we remove it!
+    """
+    trajectory = trajectory[1:]  # Remove the first timestep with all-zero action
+
+    for i in range(0, len(trajectory)):
+        # trajectory[i]["action"] = np.concatenate(
+        #     (
+        #         trajectory[i]["action"]["world_vector"],
+        #         trajectory[i]["action"]["rotation_delta"],
+        #         trajectory[i]["action"]["open_gripper"][:, None],
+        #     ),
+        #     axis=-1,
+        # )
+
+        trajectory[i]["action"] = np.concatenate((trajectory[i]['action']['world_vector'], 
+                                                    trajectory[i]['action']['rotation_delta'], 
+                                                        [trajectory[i]['action']['open_gripper']], 
+                                                        ), axis=-1
+                                                    ).astype(np.float32),
+        trajectory[i]["language_instruction"] = trajectory[i]["observation"]["natural_language_instruction"]
+        # trajectory = relabel_bridge_actions(trajectory)
+        trajectory[i]["observation"]["EEF_state"] = trajectory[i]["observation"]["state"][:6]
+        trajectory[i]["observation"]["gripper_state"] = trajectory[i]["observation"]["state"][-1:]
+    return trajectory
+
+def maniskill_dataset_transform(trajectory):
+    for i in range(0, len(trajectory)):
+        trajectory[i]["observation"]["gripper_state"] = trajectory[i]["observation"]["state"][7:8]
+        trajectory[i]["action"] = trajectory[i]["action"].numpy()
+        trajectory[i]['observation']["natural_language_instruction"] = trajectory[i]["language_instruction"]
+    return trajectory
+
+def robocook_dataset_transform(trajectory):
+    for i in range(0, len(trajectory)):
+        trajectory[i]["observation"]["eef_state"] = trajectory[i]["observation"]["state"][:6]
+        trajectory[i]["action"] = trajectory[i]["action"].numpy()
+        trajectory[i]['observation']["natural_language_instruction"] = trajectory[i]["language_instruction"]
+        trajectory[i]["observation"]["gripper_state"] = trajectory[i]["observation"]["state"][-1:]
+        trajectory[i]["observation"]["image"] = trajectory[i]["observation"]["image_1"]
+    return trajectory
+
+def apply_transforms(episode, cfg, dataset_name):
+    """
+    Apply the necessary transforms to the episode data.
+    This function is a placeholder for any transformations that need to be applied.
+    """
+    TRANSFORMS = {
+        "bridge_oxe": bridge_oxe_dataset_transform,
+        "stanford_robocook_converted_externally_to_rlds": robocook_dataset_transform,
+        "maniskill_dataset_converted_externally_to_rlds": maniskill_dataset_transform,
+        # Add other dataset specific transforms here if needed
+    }
+    # Example transformation: resize images, normalize actions, etc.
+    episode = TRANSFORMS[cfg.dataset.dataset_indicies[dataset_name]["dataset_key"]](episode)
+    return episode
+
 class CircularBuffer:
     """ A circular buffer impolimented using a collection of numpy arrays.
     The buffer stores images, actions, goals, goal images, rotation deltas, and open gripper states.
@@ -142,15 +202,15 @@ def get_dataset_portion(builder, cbuffer, start, end, cfg, dataset_name=None):
         for episode in datasetRemote:
             episode = list(episode['steps'])
             ## https://github.com/openvla/openvla/blob/main/prismatic/vla/datasets/rlds/oxe/transforms.py
-            episode = transforms.OXE_STANDARDIZATION_TRANSFORMS[cfg.dataset.dataset_indicies[dataset_name]["dataset_key"]](episode)
+            episode = apply_transforms(episode, cfg, dataset_name)
             goal_img = cv2.resize(np.array(episode[-1]['observation']["image"], dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))  
             # print("Ajout de", len(episode), "données à la circular buffer.")
             for i in range(len(episode)): ## Resize images to reduce computation
                 
                 obs = cv2.resize(np.array(episode[i]['observation']["image"], dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))
                 cbuffer.add(obs = obs, 
-                            action = episode[i]['action'] * cfg.dataset.dataset_indicies[dataset_name]["scale"], 
-                            goal= episode[i]['observation']["image"].numpy().decode(),
+                            action = episode[i]['action'], 
+                            goal= episode[i]['observation']["natural_language_instruction"].numpy().decode(),
                             # goal=episode[i]['observation']['natural_language_instruction'],
                             goal_img=goal_img,
                             # rotation_delta=episode[i]['action']['rotation_delta'], 
@@ -204,7 +264,7 @@ def my_main(cfg: DictConfig):
         ## Call function to swap out a portion of data.
         get_multi_dataset_portion(cbuffer._builders, cbuffer, cbuffer._cfg)
         print("Dataset shape:", len(cbuffer._dataset_tmp["img"]))
-        print("Dataset len:", len(cbuffer._count))
+        print("Dataset len:", cbuffer._count)
 
 
 if __name__ == "__main__":
