@@ -9,7 +9,7 @@ gc.enable()
 import numpy as np
 import torch
 
-from openvla.prismatic.vla.datasets.rlds.oxe import transforms as transforms
+# from openvla.prismatic.vla.datasets.rlds.oxe import transforms as transforms
 
 def bridge_oxe_dataset_transform(trajectory):
     """
@@ -238,11 +238,10 @@ def get_multi_dataset_portion(builders, cbuffer, cfg):
         start = cfg.dataset.dataset_indicies[dataset_name]["start"]
         end = start + int(cfg.dataset.chunk_size * cfg.dataset.dataset_indicies[dataset_name]["weight"])
         print("start:", start, "end:", end, "dataset_name:", dataset_name)
-        # start_ = cbuffer._dataset_indecies[cbuffer._cfg.dataset.from_name]["start"] = start_ + cbuffer._cfg.dataset.chunk_size
-        print("start_", start, " end_", end, " size_ ", cbuffer._dataset_indecies[cbuffer._cfg.dataset.from_name]["size"]
+        print("start_", start, " end_", end, " size_ ", cbuffer._dataset_indecies[dataset_name]["size"]
                 , " count_", cbuffer._count, " index_", cbuffer._index)
-        if start >= cbuffer._dataset_indecies[cbuffer._cfg.dataset.from_name]["size"]: ## If we have reached the end of the dataset, reset the start index
-            cbuffer._dataset_indecies[cbuffer._cfg.dataset.from_name] = 0
+        if start >= cbuffer._dataset_indecies[dataset_name]["size"]: ## If we have reached the end of the dataset, reset the start index
+            cbuffer._dataset_indecies[dataset_name] = 0
         get_dataset_portion(builders[dataset_name], cbuffer, start, end, cfg, dataset_name=dataset_name)
         
 
