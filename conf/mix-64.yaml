@@ -21,7 +21,7 @@ experiment:
   project: mini-grp
   
 batch_size: 128 # how many independent sequences will we process in parallel?
-max_block_size: 12 ## Will be overidden by code
+max_block_size: 1 ## Will be overidden by code
 vocab_size: 32 ## Will be overidden by code
 n_patches: 8
 max_iters: 200000

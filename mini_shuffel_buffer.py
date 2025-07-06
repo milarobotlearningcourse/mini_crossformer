@@ -77,11 +77,11 @@ class CircularBuffer:
         self._count = 0
         self._dataset_tmp = {
                             "img": torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.uint8, device=self._cfg.device), 
-                             "action": torch.tensor(np.zeros(shape=(self._size, len(self._cfg.env.action_std)),), dtype=torch.float, device=self._cfg.device),
-                             "goal": torch.tensor(np.zeros(shape=(self._size, self._cfg.max_block_size)), dtype=torch.float, device=self._cfg.device), 
-                             "goal_img": torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.uint8, device=self._cfg.device),
-                    # "rotation_delta": [], "open_gripper": [] 
-                            "t5_language_embedding": torch.tensor(np.zeros(shape=(self._size, self._cfg.max_block_size, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device) if self._cfg.dataset.encode_with_t5 else None
+                            "action": torch.tensor(np.zeros(shape=(self._size, len(self._cfg.env.action_std)),), dtype=torch.float, device=self._cfg.device),
+                            "goal": torch.tensor(np.zeros(shape=(self._size, self._cfg.max_block_size)), dtype=torch.float, device=self._cfg.device), 
+                            "goal_img": torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.uint8, device=self._cfg.device),
+                            # "rotation_delta": [], "open_gripper": [] 
+                            "t5_language_embedding": torch.tensor(np.zeros(shape=(self._size, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device) if self._cfg.dataset.encode_with_t5 else None
                             } 
                     
         if self._cfg.dataset.encode_with_t5:
@@ -146,11 +146,11 @@ class CircularBuffer:
         ## Make goal embeddings of a fixed length and fill in the earlier chunks with the true goal data
         
         if self._cfg.dataset.encode_with_t5:
-            goal__ = np.zeros((self._cfg.max_block_size, self._cfg.n_embd))
+            goal__ = np.zeros((self._cfg.n_embd))
             input_ids = self._tokenizer(goal, return_tensors="pt").input_ids
-            goal_t = self._model.encoder(input_ids).last_hidden_state.detach().cpu().numpy() ## Get the goal embedding
-            goal__[:len(goal_t[0]), :] = goal_t[0][:self._cfg.max_block_size] ## Overwrite just the zeros up to the size of this vector, smaller vectors will have < max_block_size
-            self._dataset_tmp["t5_language_embedding"][self._index] = torch.tensor(goal__, dtype=torch.float, device=self._cfg.device)
+            goal_t = self._model.encoder(input_ids).last_hidden_state.detach().cpu().numpy()[0, -1] ## Get the goal embedding
+            # goal__[:len(goal_t[0]), :] = goal_t[0][:self._cfg.max_block_size] ## Overwrite just the zeros up to the size of this vector, smaller vectors will have < max_block_size
+            self._dataset_tmp["t5_language_embedding"][self._index] = torch.tensor(goal_t, dtype=torch.float, device=self._cfg.device)
         
         goal_ = " " * self._cfg.max_block_size
         goal_ = goal[:self._cfg.max_block_size] + goal_[len(goal):self._cfg.max_block_size] 

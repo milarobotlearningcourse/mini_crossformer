@@ -99,7 +99,7 @@ class FeedFoward(nn.Module):
     def __init__(self, n_embd, dropout):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(n_embd, 4 * n_embd),
+            nn.Linear(n_embd, 4 * n_embd), ## This is where the information may be sotred.
             nn.ReLU(),
             nn.Linear(4 * n_embd, n_embd),
             nn.Dropout(dropout),
@@ -199,17 +199,19 @@ class GRP(nn.Module):
     patches_g = get_patches_fast(goal_imgs)
     if self._cfg.dataset.encode_with_t5:
         goals_e = goals_txt ## This is actually the embedding from the T5 model
-        B, T, E = goals_txt.shape
+        B, E = goals_txt.shape
+        T = 1
+        goals_e = torch.reshape(goals_e, (B, 1, E)) ## Reshape to match the embedding size
     else:
         goals_e = self.token_embedding_table(goals_txt)
-        B, T = goals_txt.shape
+        B, E = goals_txt.shape
     
-    # Running linear layer tokenization
+    # Running linear layer tokenization to get embeddings
     # Map the vector corresponding to each patch to the hidden size dimension
     out = self.lin_map(patches)
     out_g = self.lin_map(patches_g)
     
-    # Adding classification and goal_img tokens to the tokens
+    # Adding classification and goal_img embeddings to the other embeddings
     out = torch.cat((self.class_tokens.expand(n, 1, -1), out, goals_e, out_g), dim=1)
     
     # Adding positional embedding
