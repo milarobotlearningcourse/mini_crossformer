@@ -81,7 +81,7 @@ class CircularBuffer:
                             "goal": torch.tensor(np.zeros(shape=(self._size, self._cfg.max_block_size)), dtype=torch.float, device=self._cfg.device), 
                             "goal_img": torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.uint8, device=self._cfg.device),
                             # "rotation_delta": [], "open_gripper": [] 
-                            "t5_language_embedding": torch.tensor(np.zeros(shape=(self._size, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device) if self._cfg.dataset.encode_with_t5 else None
+                            "t5_language_embedding": torch.tensor(np.zeros(shape=(self._size, 1, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device) if self._cfg.dataset.encode_with_t5 else None
                             } 
                     
         if self._cfg.dataset.encode_with_t5:

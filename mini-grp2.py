@@ -199,8 +199,8 @@ class GRP(nn.Module):
     patches_g = get_patches_fast(goal_imgs)
     if self._cfg.dataset.encode_with_t5:
         goals_e = goals_txt ## This is actually the embedding from the T5 model
-        B, E = goals_txt.shape
-        T = 1
+        B, T, E = goals_txt.shape
+        # T = 1
         goals_e = torch.reshape(goals_e, (B, 1, E)) ## Reshape to match the embedding size
     else:
         goals_e = self.token_embedding_table(goals_txt)

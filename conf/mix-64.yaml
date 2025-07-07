@@ -59,8 +59,8 @@ data_shuffel_interval: 1000
 dataset: 
   from_name: "/network/datasets/openxembodiment/datasets/bridge/0.1.0/"
   to_name: gberseth/bridge-data-64px-full
-  num_episodes: 500
-  chunk_size: 500
+  num_episodes: 5
+  chunk_size: 5
   buffer_size: 50000
   encode_with_t5: true
   t5_version: "t5-small"
