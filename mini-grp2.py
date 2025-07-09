@@ -144,7 +144,7 @@ class GRP(nn.Module):
     """
     self.patch_size = (self._cfg.image_shape[0] / self._cfg.n_patches, self._cfg.image_shape[1] / self._cfg.n_patches)
     #Positional embedding
-    self.register_buffer('positional_embeddings', calc_positional_embeddings(1 + self._cfg.n_patches ** 2 + self._cfg.max_block_size + self._cfg.n_patches ** 2, cfg.n_embd), persistent=False)
+    self.register_buffer('positional_embeddings', calc_positional_embeddings(1 + ((self._cfg.n_patches ** 2) * self._cfg.policy.obs_stacking) + self._cfg.max_block_size + self._cfg.n_patches ** 2, cfg.n_embd), persistent=False)
 
     self.token_embedding_table = nn.Embedding(cfg.vocab_size, cfg.n_embd)
     self.class_tokens = nn.Parameter(torch.rand(1, cfg.n_embd))
@@ -158,7 +158,7 @@ class GRP(nn.Module):
 
     # 5) Classification MLPk
     self.mlp = nn.Sequential(
-        nn.Linear(self._cfg.n_embd, self._cfg.action_bins),
+        nn.Linear(self._cfg.n_embd, self._cfg.action_bins * self._cfg.policy.action_stacking),  # Output size is action_bins * action_stacking
     )
     # [/TODO]
 
@@ -195,7 +195,8 @@ class GRP(nn.Module):
 
     [/DEFAULT]
     """
-    patches = get_patches_fast(images)
+    patches = get_patches_fast(images[:,:,:,:3]) ## Only use the first 3 channels of the image
+    patches_more = get_patches_fast(images[:,:,:,3:])
     patches_g = get_patches_fast(goal_imgs)
     if self._cfg.dataset.encode_with_t5:
         goals_e = goals_txt ## This is actually the embedding from the T5 model
@@ -205,26 +206,28 @@ class GRP(nn.Module):
     else:
         goals_e = self.token_embedding_table(goals_txt)
         B, E = goals_txt.shape
+        T = self._cfg.max_block_size
     
     # Running linear layer tokenization to get embeddings
     # Map the vector corresponding to each patch to the hidden size dimension
     out = self.lin_map(patches)
+    out_m = self.lin_map(patches_more)
     out_g = self.lin_map(patches_g)
     
     # Adding classification and goal_img embeddings to the other embeddings
-    out = torch.cat((self.class_tokens.expand(n, 1, -1), out, goals_e, out_g), dim=1)
+    out = torch.cat((self.class_tokens.expand(n, 1, -1), out, out_m, goals_e, out_g), dim=1)
     
     # Adding positional embedding
     out = out + self.positional_embeddings.repeat(n, 1, 1)
 
     ## Compute blocked masks
-    mask = torch.ones((1 + c + T + c, ), device=self._cfg.device) ## (1, T)
+    mask = torch.ones((1 + (c * self._cfg.policy.obs_stacking) + T + c, ), device=self._cfg.device) ## (1, T)
     if targets is None:
         pass
     elif (torch.rand(1)[0] > 0.66):  
-        mask[1 + c: 1 + c+ T] = torch.zeros((1,T), device=self._cfg.device) ## Mask goal string
+        mask[1 + (c * self._cfg.policy.obs_stacking): 1 + (c * self._cfg.policy.obs_stacking) + T] = torch.zeros((1,T), device=self._cfg.device) ## Mask goal string
     elif (torch.rand(1)[0] > 0.33):
-        mask[1 + c + T: 1 + c + T + c] = torch.zeros((1,c), device=self._cfg.device) ## Mask goal image
+        mask[1 + (c * self._cfg.policy.obs_stacking) + T: 1 + (c * self._cfg.policy.obs_stacking) + T + c] = torch.zeros((1,c), device=self._cfg.device) ## Mask goal image
         
     # Transformer Blocks
     for block in self.blocks:
@@ -308,7 +311,7 @@ def preprocess_data(cfg, device):
 
 
 # @hydra.main(config_path="conf", config_name="grp-mini")
-@hydra.main(config_path="./conf", config_name="mix-64")
+@hydra.main(config_path="./conf", config_name="libero-64pix")
 def my_main(cfg: DictConfig):
     torch.manual_seed(cfg.r_seed)
     log_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir

@@ -81,7 +81,8 @@ class CircularBuffer:
                             "goal": torch.tensor(np.zeros(shape=(self._size, self._cfg.max_block_size)), dtype=torch.float, device=self._cfg.device), 
                             "goal_img": torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.uint8, device=self._cfg.device),
                             # "rotation_delta": [], "open_gripper": [] 
-                            "t5_language_embedding": torch.tensor(np.zeros(shape=(self._size, 1, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device) if self._cfg.dataset.encode_with_t5 else None
+                            "t5_language_embedding": torch.tensor(np.zeros(shape=(self._size, 1, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device) if self._cfg.dataset.encode_with_t5 else None,
+                            "terminal": torch.tensor(np.zeros(shape=(self._size, 1)), dtype=torch.uint8, device=self._cfg.device),
                             } 
                     
         if self._cfg.dataset.encode_with_t5:
@@ -128,17 +129,23 @@ class CircularBuffer:
                 "goal": dataset["goal"]
             }
             for i in range(len(dataset_tmp["img"])):
-                self.add(dataset_tmp["img"][i], 
-                          dataset_tmp["action"][i], 
+                if len(dataset_tmp["action"][i:i+self._cfg.policy.action_stacking]) < self._cfg.policy.action_stacking:
+                    print("Skipping index", i, "because action length is less than", self._cfg.policy.action_stacking)
+                    continue
+                self.add(
+                        dataset_tmp["img"][i], 
+                        #  np.reshape(dataset_tmp["img"][i:i+self._cfg.policy.action_stacking], newshape=(1, len(self._cfg.env.action_std) * self._cfg.policy.action_stacking) ),
+                          dataset_tmp["action"][i],
                           dataset_tmp["goal"][i], 
                           dataset_tmp["goal_img"][i],
                         #   language_instruction=dataset["language_instruction"][i] if cfg.dataset.encode_with_t5 else None
+                        terminal=0
                           )
                 # self.add(dataset_tmp["img"][i], , goal, goal_img, language_instruction)
             print("Loaded dataset with size:", self._count)
         self._dataset_indecies = self._cfg.dataset.dataset_indicies
 
-    def add(self, obs, action, goal, goal_img, language_instruction=None):
+    def add(self, obs, action, goal, goal_img, language_instruction=None, terminal=0):
         """ Add an observation, action, goal, goal image, rotation delta, and open gripper state to the buffer."""
     
         self._dataset_tmp["img"][self._index] = torch.tensor(obs, dtype=torch.uint8, device=self._cfg.device)
@@ -157,6 +164,7 @@ class CircularBuffer:
         # assert len(goal_) == self._cfg.max_block_size
         self._dataset_tmp["goal"][self._index] = torch.tensor(self._encode_txt(goal_), dtype=torch.float, device=self._cfg.device)
         self._dataset_tmp["goal_img"][self._index] = torch.tensor(goal_img, dtype=torch.uint8, device=self._cfg.device)
+        self._dataset_tmp["terminal"][self._index] = torch.tensor(terminal, dtype=torch.uint8, device=self._cfg.device)
         self._count += 1
         self._index = (self._index + 1) % self._size
 
@@ -164,14 +172,24 @@ class CircularBuffer:
         # generate a small batch of inputs x and targets y
         # data = dataset['train'] if split == 'train' else dataset['test']
         data = self._dataset_tmp
-        ix = np.random.randint(min(self._count, self._size), size=(batch_size,))
-        x = torch.tensor(self._encode_state(data["img"][ix]), dtype=torch.float, device=cfg.device)
+        ix = np.random.randint(min(self._count, self._size)-(max(cfg.policy.action_stacking, cfg.policy.obs_stacking)-1), size=(batch_size,))
+        if cfg.policy.obs_stacking > 1:
+            obs_ = torch.concatenate((data["img"][ix], data["img"][ix+1]), axis=-1) 
+            x = torch.tensor(self._encode_state(obs_), dtype=torch.float, device=cfg.device)
+        else:
+            x = torch.tensor(self._encode_state(data["img"][ix]), dtype=torch.float, device=cfg.device)
         if cfg.dataset.encode_with_t5:
             x_goal = torch.tensor(data["t5_language_embedding"][ix], dtype=torch.float, device=cfg.device)
         else:
             x_goal = torch.tensor(data["goal"][ix], dtype=torch.long, device=cfg.device)
         x_goal_img = torch.tensor(self._encode_state(data["goal_img"][ix]), dtype=torch.float, device=cfg.device)
-        y = torch.tensor(data["action"][ix], dtype=torch.float, device=cfg.device)
+        if cfg.policy.action_stacking > 1:
+            ## Stack the next cfg.policy.action_stacking actions together
+            ## Can extended slicing us list of lists...
+            y = torch.concatenate((data["action"][ix], data["action"][ix+1]), axis=1) 
+        else:
+            y = torch.tensor(data["action"][ix], dtype=torch.float, device=cfg.device)
+
         return x, x_goal, x_goal_img, y
     
     def shuffle(self, shared_queue):
@@ -227,15 +245,18 @@ def get_dataset_portion(builder, cbuffer, start, end, cfg, dataset_name=None):
             goal_img = cv2.resize(np.array(episode[-1]['observation']["image"], dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))  
             # print("Ajout de", len(episode), "données à la circular buffer.")
             for i in range(len(episode)): ## Resize images to reduce computation
-                
+                if (i+cfg.policy.action_stacking > len(episode)):
+                    # print("Skipping index", i, "because action length is less than", cfg.policy.action_stacking)
+                    continue
                 obs = cv2.resize(np.array(episode[i]['observation']["image"], dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))
                 cbuffer.add(obs = obs, 
-                            action = episode[i]['action'], 
+                            action = episode[i]['action'],
                             goal= episode[i]['observation']["natural_language_instruction"].numpy().decode(),
                             # goal=episode[i]['observation']['natural_language_instruction'],
                             goal_img=goal_img,
                             # rotation_delta=episode[i]['action']['rotation_delta'], 
                             # language_instruction=episode[i]['observation']['natural_language_instruction'].numpy().decode()
+                            terminal = 1 if i == len(episode) - 1 else 0
                             )
     print("A terminé le mélange.")
     return cbuffer
