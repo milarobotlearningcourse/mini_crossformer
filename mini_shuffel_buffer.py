@@ -28,7 +28,7 @@ def bridge_oxe_dataset_transform(trajectory):
                                                     ).astype(np.float32),
         trajectory[i]["language_instruction"] = trajectory[i]["observation"]["natural_language_instruction"]
         # trajectory = relabel_bridge_actions(trajectory)
-        trajectory[i]["observation"]["EEF_state"] = trajectory[i]["observation"]["state"][:6]
+        trajectory[i]["observation"]["eef_state"] = trajectory[i]["observation"]["state"][:6]
         trajectory[i]["observation"]["gripper_state"] = trajectory[i]["observation"]["state"][-1:]
     return trajectory
 
@@ -77,6 +77,7 @@ class CircularBuffer:
         self._count = 0
         self._dataset_tmp = {
                             "img": torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.uint8, device=self._cfg.device), 
+                            "pose": torch.tensor(np.zeros(shape=(self._size, len(self._cfg.env.action_std)),), dtype=torch.float, device=self._cfg.device),
                             "action": torch.tensor(np.zeros(shape=(self._size, len(self._cfg.env.action_std)),), dtype=torch.float, device=self._cfg.device),
                             "goal": torch.tensor(np.zeros(shape=(self._size, self._cfg.max_block_size)), dtype=torch.float, device=self._cfg.device), 
                             "goal_img": torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.uint8, device=self._cfg.device),
@@ -146,6 +147,8 @@ class CircularBuffer:
                           )
                 # self.add(dataset_tmp["img"][i], , goal, goal_img, language_instruction)
             print("Loaded dataset with size:", self._count)
+        else:
+            get_multi_dataset_portion(self._builders, self, self._cfg)
         self._dataset_indecies = self._cfg.dataset.dataset_indicies
 
     def add(self, obs, action, goal, goal_img, language_instruction=None, terminal=0):

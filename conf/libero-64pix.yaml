@@ -65,7 +65,7 @@ dataset:
   to_name: gberseth/bridge-data-64px-full
   num_episodes: 50
   chunk_size: 50
-  buffer_size: 5000
+  buffer_size: 50000
   encode_with_t5: false
   t5_version: "t5-small"
   chars_list:  [' ', ',', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
