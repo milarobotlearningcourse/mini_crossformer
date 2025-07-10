@@ -27,10 +27,17 @@ def estimate_loss(model):
 
 def get_patches_fast(images):
     from einops import rearrange
-    batch_size, channels, height, width = images.shape
+    batch_size, height, width, channels = images.shape
     patch_size = height // 8 ## n_patches = 8
+    patch_items = 192 ## 192 is the number of items in each patch (8 height * 8 width * 3 channels)
 
-    patches = rearrange(images, 'b (h p1) (w p2) c -> b (h w) (p1 p2 c)', p1 = patch_size, p2 = patch_size)
+    patches = rearrange(images[:,:,:,:3], 'b (h p1) (w p2) c -> b (h w) (p1 p2 c)', p1 = patch_size, p2 = patch_size)
+    if channels > 3:
+        ## History stacking in the channel dimension for observations only, not goal images.
+        hs=2
+        # patches_2 = rearrange(images[:,:,:,3:], 'b (h p1) (w p2) c -> b (h w) (p1 p2 c)', p1 = patch_size, p2 = patch_size)
+        patches = rearrange(images, 'b (h p1) (w p2) (c hs) -> b (h w hs) (p1 p2 c)', p1 = patch_size, p2 = patch_size, hs=2) ## Stack the history in the channel dimension
+        # patches = torch.cat((patches, patches_2), dim=1) ## Conc
     return patches
 
 def calc_positional_embeddings(sequence_length, d):
@@ -195,8 +202,10 @@ class GRP(nn.Module):
 
     [/DEFAULT]
     """
-    patches = get_patches_fast(images[:,:,:,:3]) ## Only use the first 3 channels of the image
-    patches_more = get_patches_fast(images[:,:,:,3:])
+    # patches = get_patches_fast(images[:,:,:,:3]) ## Only use the first 3 channels of the image
+    # patches_more = get_patches_fast(images[:,:,:,3:])
+    # obs_patches = [get_patches_fast(images[:,:,:,3*i:3*(i+1)] for i in range(self._cfg.policy.obs_stacking))] ## Only use the first 3 channels of the image
+    obs_patches = get_patches_fast(images)
     patches_g = get_patches_fast(goal_imgs)
     if self._cfg.dataset.encode_with_t5:
         goals_e = goals_txt ## This is actually the embedding from the T5 model
@@ -210,12 +219,13 @@ class GRP(nn.Module):
     
     # Running linear layer tokenization to get embeddings
     # Map the vector corresponding to each patch to the hidden size dimension
-    out = self.lin_map(patches)
-    out_m = self.lin_map(patches_more)
+    # out = self.lin_map(patches)
+    # out_m = self.lin_map(patches_more)
+    out_obs = self.lin_map(obs_patches) ## List of tensors, one for each stacked observation
     out_g = self.lin_map(patches_g)
     
     # Adding classification and goal_img embeddings to the other embeddings
-    out = torch.cat((self.class_tokens.expand(n, 1, -1), out, out_m, goals_e, out_g), dim=1)
+    out = torch.cat((self.class_tokens.expand(n, 1, -1), out_obs, goals_e, out_g), dim=1)
     
     # Adding positional embedding
     out = out + self.positional_embeddings.repeat(n, 1, 1)
