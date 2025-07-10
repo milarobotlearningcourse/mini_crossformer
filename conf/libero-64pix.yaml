@@ -30,7 +30,7 @@ learning_rate: 5e-5
 eval_iters: 200
 policy:
   action_stacking: 2
-  obs_stacking: 2
+  obs_stacking: 3
 
 n_embd: 512
 device: "cuda"
@@ -58,12 +58,12 @@ env:
 
 ## Model hyperparameters
 image_shape: [64, 64, 3]
-data_shuffel_interval: 100
+data_shuffel_interval: 500
 dataset: 
   from_name: "/network/datasets/openxembodiment/datasets/bridge/0.1.0/"
   to_name: gberseth/bridge-data-64px-full
-  num_episodes: 5
-  chunk_size: 5
+  num_episodes: 50
+  chunk_size: 50
   buffer_size: 5000
   encode_with_t5: false
   t5_version: "t5-small"
@@ -75,8 +75,8 @@ dataset:
   load_dataset: true
   dataset_indicies: {
     "/network/datasets/openxembodiment/datasets/bridge/0.1.0/": {"start": 11, size: 28935, weight: 0.3, dataset_key: "bridge_oxe", scale: 1.0},
-    # "/network/datasets/openxembodiment/datasets/stanford_robocook_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.3, dataset_key: "stanford_robocook_converted_externally_to_rlds", scale: 1.0},
-    # "/network/datasets/openxembodiment/datasets/maniskill_dataset_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.3, dataset_key: "maniskill_dataset_converted_externally_to_rlds", scale: 1.0},
+    "/network/datasets/openxembodiment/datasets/stanford_robocook_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.3, dataset_key: "stanford_robocook_converted_externally_to_rlds", scale: 1.0},
+    "/network/datasets/openxembodiment/datasets/maniskill_dataset_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.3, dataset_key: "maniskill_dataset_converted_externally_to_rlds", scale: 1.0},
     # "/network/projects/real-g-grp/modified_libero_rlds": {"start": 0, size: 1000000, weight: 0.3, dataset_key: "maniskill_dataset_converted_externally_to_rlds", scale: 1.0},
     # "gs://gresearch/robotics/bridge/0.1.0/": {"start": 11, size: 28935, weight: 0.5, dataset_key: "bridge_oxe", scale: 1.0},
     # "gs://gresearch/robotics/stanford_robocook_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.5, dataset_key: "stanford_robocook_converted_externally_to_rlds", scale: 1.0},

@@ -25,7 +25,7 @@ def estimate_loss(model):
     model.train()
     return out
 
-def get_patches_fast(images):
+def get_patches_fast(images, cfg):
     from einops import rearrange
     batch_size, height, width, channels = images.shape
     patch_size = height // 8 ## n_patches = 8
@@ -34,9 +34,8 @@ def get_patches_fast(images):
     patches = rearrange(images[:,:,:,:3], 'b (h p1) (w p2) c -> b (h w) (p1 p2 c)', p1 = patch_size, p2 = patch_size)
     if channels > 3:
         ## History stacking in the channel dimension for observations only, not goal images.
-        hs=2
         # patches_2 = rearrange(images[:,:,:,3:], 'b (h p1) (w p2) c -> b (h w) (p1 p2 c)', p1 = patch_size, p2 = patch_size)
-        patches = rearrange(images, 'b (h p1) (w p2) (c hs) -> b (h w hs) (p1 p2 c)', p1 = patch_size, p2 = patch_size, hs=2) ## Stack the history in the channel dimension
+        patches = rearrange(images, 'b (h p1) (w p2) (c hs) -> b (h w hs) (p1 p2 c)', p1 = patch_size, p2 = patch_size, hs=cfg.policy.obs_stacking) ## Stack the history in the channel dimension
         # patches = torch.cat((patches, patches_2), dim=1) ## Conc
     return patches
 
@@ -205,8 +204,8 @@ class GRP(nn.Module):
     # patches = get_patches_fast(images[:,:,:,:3]) ## Only use the first 3 channels of the image
     # patches_more = get_patches_fast(images[:,:,:,3:])
     # obs_patches = [get_patches_fast(images[:,:,:,3*i:3*(i+1)] for i in range(self._cfg.policy.obs_stacking))] ## Only use the first 3 channels of the image
-    obs_patches = get_patches_fast(images)
-    patches_g = get_patches_fast(goal_imgs)
+    obs_patches = get_patches_fast(images, self._cfg) 
+    patches_g = get_patches_fast(goal_imgs, self._cfg)
     if self._cfg.dataset.encode_with_t5:
         goals_e = goals_txt ## This is actually the embedding from the T5 model
         B, T, E = goals_txt.shape

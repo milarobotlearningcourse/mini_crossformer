@@ -173,8 +173,11 @@ class CircularBuffer:
         # data = dataset['train'] if split == 'train' else dataset['test']
         data = self._dataset_tmp
         ix = np.random.randint(min(self._count, self._size)-(max(cfg.policy.action_stacking, cfg.policy.obs_stacking)-1), size=(batch_size,))
+        x = torch.tensor(self._encode_state(data["img"][ix]), dtype=torch.float, device=cfg.device)
         if cfg.policy.obs_stacking > 1:
-            obs_ = torch.concatenate((data["img"][ix], data["img"][ix+1]), axis=-1) 
+            obs_ = torch.tensor(data["img"][ix], dtype=torch.float, device=cfg.device)
+            for i in range(1, cfg.policy.obs_stacking): ## This is slow but works.
+                obs_ = torch.concatenate((obs_, data["img"][ix+i]), axis=-1) 
             x = torch.tensor(self._encode_state(obs_), dtype=torch.float, device=cfg.device)
         else:
             x = torch.tensor(self._encode_state(data["img"][ix]), dtype=torch.float, device=cfg.device)
