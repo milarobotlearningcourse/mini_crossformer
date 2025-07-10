@@ -114,8 +114,11 @@ class CircularBuffer:
         # print("example text encode:", encode_txt(dataset_tmp["goal"][0]))
 
         cfg.action_bins = len(cfg.env.action_mean)
-        self._encode_action = lambda af:   (((af - cfg.env.action_mean)/(cfg.env.action_std))).astype(np.float32) # encoder: take a float, output an integer
-        self._decode_action = lambda binN: (binN * cfg.env.action_std) + cfg.env.action_mean  # Undo mapping to [-1, 1]
+        ## Make a fixed torch vector to scale the actions from the dataset
+        action_mean = torch.tensor(cfg.env.action_mean, dtype=torch.float, device=cfg.device)
+        action_std = torch.tensor(cfg.env.action_std, dtype=torch.float, device=cfg.device)
+        self._encode_action = lambda af:   (af - action_mean)/(action_std) # encoder: take a float, output an integer
+        self._decode_action = lambda binN: (binN * action_std) + action_mean  # Undo mapping to [-1, 1]
 
         if self._cfg.dataset.load_dataset:
             # Load the dataset from a file
@@ -188,10 +191,12 @@ class CircularBuffer:
         x_goal_img = torch.tensor(self._encode_state(data["goal_img"][ix]), dtype=torch.float, device=cfg.device)
         if cfg.policy.action_stacking > 1:
             ## Stack the next cfg.policy.action_stacking actions together
-            ## Can extended slicing us list of lists...
-            y = torch.concatenate((data["action"][ix], data["action"][ix+1]), axis=1) 
+            ## Can extended slicing us list of lists... 
+            y = torch.tensor(self._encode_action(data["action"][ix]), dtype=torch.float, device=cfg.device)
+            for i in range(1, cfg.policy.action_stacking): ## This is slow but works.
+                y = torch.concatenate((y, self._encode_action(data["action"][ix+i])), axis=-1) 
         else:
-            y = torch.tensor(data["action"][ix], dtype=torch.float, device=cfg.device)
+            y = torch.tensor(self._encode_action(data["action"][ix]), dtype=torch.float, device=cfg.device)
 
         return x, x_goal, x_goal_img, y
     
