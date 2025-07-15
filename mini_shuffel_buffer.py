@@ -128,8 +128,7 @@ class CircularBuffer:
             dataset = datasets.load_dataset(self._cfg.dataset.to_name, split='train')
             dataset_tmp = {
                 "img": np.array(dataset["img"]),
-                "action": np.concatenate((np.array(dataset["action"]) ,np.array(dataset["rotation_delta"])
-                                        ,np.array(dataset["open_gripper"])), axis=1),
+                "action": np.array(dataset["action"]),
                 "goal_img": np.array(dataset["goal_img"]),
                 "goal": dataset["goal"]
             }
@@ -232,7 +231,7 @@ class CircularBuffer:
             dataset_tmp["action"].append(self._dataset_tmp["action"][i].cpu().numpy())
             # dataset_tmp["rotation_delta"].append(self._dataset_tmp[i]['action']['rotation_delta'])
             # dataset_tmp["open_gripper"].append([np.array(self._dataset_tmp[i]['action']['open_gripper'], dtype=np.uint8)])
-            dataset_tmp["goal"].append(self._dataset_tmp['goal'][i].cpu().numpy())
+            dataset_tmp["goal"].append(self._decode_txy(self._dataset_tmp['goal'][i].cpu().numpy()))
             dataset_tmp["goal_img"].append(Image.fromarray(self._dataset_tmp["goal_img"][i].cpu().numpy().astype('uint8') ))
 
             if self._cfg.dataset.encode_with_t5:

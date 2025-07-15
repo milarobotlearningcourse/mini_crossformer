@@ -34,7 +34,7 @@ policy:
   obs_stacking: 3
 
 n_embd: 512
-device: "cpu"
+device: "cuda"
 testing: true
 simEval: false
 eval_vid_iters: 2500
@@ -73,8 +73,8 @@ dataset:
    '@', '#', '$', '%', '&', '*', '+', '=', '<', '>', '/', '\\', '|', '~', '`',
    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 
    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
-  load_dataset: true
-  save_initial_dataset: false
+  load_dataset: false
+  save_initial_dataset: true
   dataset_indicies: {
     # "/network/datasets/openxembodiment/datasets/bridge/0.1.0/": {"start": 11, size: 28935, weight: 0.3, dataset_key: "bridge_oxe", scale: 1.0},
     # "/network/datasets/openxembodiment/datasets/stanford_robocook_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.3, dataset_key: "stanford_robocook_converted_externally_to_rlds", scale: 1.0},
