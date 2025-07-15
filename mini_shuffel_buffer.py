@@ -121,6 +121,7 @@ class CircularBuffer:
         self._encode_action = lambda af:   (af - action_mean)/(action_std) # encoder: take a float, output an integer
         self._decode_action = lambda binN: (binN * action_std) + action_mean  # Undo mapping to [-1, 1]
 
+        self._dataset_indecies = self._cfg.dataset.dataset_indicies
         if self._cfg.dataset.load_dataset:
             # Load the dataset from a file
             import datasets
@@ -149,7 +150,6 @@ class CircularBuffer:
             print("Loaded dataset with size:", self._count)
         else:
             get_multi_dataset_portion(self._builders, self, self._cfg)
-        self._dataset_indecies = self._cfg.dataset.dataset_indicies
 
     def add(self, obs, action, goal, goal_img, language_instruction=None, terminal=0):
         """ Add an observation, action, goal, goal image, rotation delta, and open gripper state to the buffer."""
@@ -220,12 +220,29 @@ class CircularBuffer:
         ## Prepare dataset for push to huggingface
         from datasets import Dataset
         import datasets
-        from datasets import Image
+        from PIL import Image
 
-        ds = Dataset.from_dict(self._dataset_tmp)
+        dataset_tmp = {"img": [], "action": [], "goal": [], "goal_img": [],
+                     }
+        if self._cfg.dataset.encode_with_t5:
+            dataset_tmp["t5_language_embedding"] = [] 
+
+        for i in range(self._count):
+            dataset_tmp["img"].append(Image.fromarray(self._dataset_tmp["img"][i].cpu().numpy().astype('uint8')))
+            dataset_tmp["action"].append(self._dataset_tmp["action"][i].cpu().numpy())
+            # dataset_tmp["rotation_delta"].append(self._dataset_tmp[i]['action']['rotation_delta'])
+            # dataset_tmp["open_gripper"].append([np.array(self._dataset_tmp[i]['action']['open_gripper'], dtype=np.uint8)])
+            dataset_tmp["goal"].append(self._dataset_tmp['goal'][i].cpu().numpy())
+            dataset_tmp["goal_img"].append(Image.fromarray(self._dataset_tmp["goal_img"][i].cpu().numpy().astype('uint8') ))
+
+            if self._cfg.dataset.encode_with_t5:
+                # input_ids = tokenizer(episode[i]['observation']['natural_language_instruction'].numpy().decode(), return_tensors="pt").input_ids
+                dataset_tmp["t5_language_embedding"].append(self._dataset_tmp['t5_language_embedding'][i].cpu().numpy())
+
+        ds = Dataset.from_dict(dataset_tmp)
 
         new_features = ds.features.copy()
-        new_features["img"] = Image()
+        # new_features["img"] = Image()
         ds.cast(new_features)
         print('Features:', ds.features)
         # ds.save_to_disk("datasets/" + cfg.dataset.to_name + ".hf")
@@ -299,7 +316,7 @@ def get_multi_dataset_portion(builders, cbuffer, cfg):
             cfg.dataset.dataset_indicies[dataset_name]["start"] = end
         get_dataset_portion(builders[dataset_name], cbuffer, start, end, cfg, dataset_name=dataset_name)
 
-@hydra.main(config_path="./conf", config_name="mix-64")
+@hydra.main(config_path="./conf", config_name="libero-64pix")
 def my_main(cfg: DictConfig):
     import tensorflow_datasets as tfds
     import numpy as np
@@ -318,6 +335,12 @@ def my_main(cfg: DictConfig):
         get_multi_dataset_portion(cbuffer._builders, cbuffer, cbuffer._cfg)
         print("Dataset shape:", len(cbuffer._dataset_tmp["img"]))
         print("Dataset len:", cbuffer._count)
+
+    if cfg.dataset.save_initial_dataset:
+        print("Saving dataset to:", cfg.dataset.to_name)
+        ############# Save the dataset to a file
+        cbuffer.save(cfg.dataset.to_name)
+    # cbuffer.save(cfg.dataset.to_name)
 
 
 if __name__ == "__main__":

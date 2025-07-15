@@ -34,7 +34,7 @@ policy:
   obs_stacking: 3
 
 n_embd: 512
-device: "cuda"
+device: "cpu"
 testing: true
 simEval: false
 eval_vid_iters: 2500
@@ -62,9 +62,9 @@ image_shape: [64, 64, 3]
 data_shuffel_interval: 500
 dataset: 
   from_name: "/network/datasets/openxembodiment/datasets/bridge/0.1.0/"
-  to_name: gberseth/bridge-data-64px-full
-  num_episodes: 50
-  chunk_size: 50
+  to_name: gberseth/libero-data-64px-full
+  num_episodes: 5
+  chunk_size: 5
   buffer_size: 50000
   encode_with_t5: false
   t5_version: "t5-small"
@@ -73,15 +73,16 @@ dataset:
    '@', '#', '$', '%', '&', '*', '+', '=', '<', '>', '/', '\\', '|', '~', '`',
    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 
    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
-  load_dataset: true
+  load_dataset: false
+  save_initial_dataset: true
   dataset_indicies: {
-    "/network/datasets/openxembodiment/datasets/bridge/0.1.0/": {"start": 11, size: 28935, weight: 0.3, dataset_key: "bridge_oxe", scale: 1.0},
-    "/network/datasets/openxembodiment/datasets/stanford_robocook_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.3, dataset_key: "stanford_robocook_converted_externally_to_rlds", scale: 1.0},
-    "/network/datasets/openxembodiment/datasets/maniskill_dataset_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.3, dataset_key: "maniskill_dataset_converted_externally_to_rlds", scale: 1.0},
+    # "/network/datasets/openxembodiment/datasets/bridge/0.1.0/": {"start": 11, size: 28935, weight: 0.3, dataset_key: "bridge_oxe", scale: 1.0},
+    # "/network/datasets/openxembodiment/datasets/stanford_robocook_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.3, dataset_key: "stanford_robocook_converted_externally_to_rlds", scale: 1.0},
+    # "/network/datasets/openxembodiment/datasets/maniskill_dataset_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.3, dataset_key: "maniskill_dataset_converted_externally_to_rlds", scale: 1.0},
     # "/network/projects/real-g-grp/modified_libero_rlds": {"start": 0, size: 1000000, weight: 0.3, dataset_key: "maniskill_dataset_converted_externally_to_rlds", scale: 1.0},
-    # "gs://gresearch/robotics/bridge/0.1.0/": {"start": 11, size: 28935, weight: 0.5, dataset_key: "bridge_oxe", scale: 1.0},
-    # "gs://gresearch/robotics/stanford_robocook_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.5, dataset_key: "stanford_robocook_converted_externally_to_rlds", scale: 1.0},
-    # "gs://gresearch/robotics/maniskill_dataset_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.5, dataset_key: "maniskill_dataset_converted_externally_to_rlds", scale: 1.0},
+    "gs://gresearch/robotics/bridge/0.1.0/": {"start": 11, size: 28935, weight: 0.5, dataset_key: "bridge_oxe", scale: 1.0},
+    "gs://gresearch/robotics/stanford_robocook_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.5, dataset_key: "stanford_robocook_converted_externally_to_rlds", scale: 1.0},
+    "gs://gresearch/robotics/maniskill_dataset_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.5, dataset_key: "maniskill_dataset_converted_externally_to_rlds", scale: 1.0},
     # "/network/datasets/openxembodiment/datasets/language_table/0.0.1": {"start": 0, size: 1000000, weight: 0.5, "image_key": "rgb", "text_key": "instruction"},  
     # "/network/datasets/openxembodiment/datasets/kuka/0.1.0": {"start": 0, size: 1000000, weight: 0.5, "image_key": "image", "text_key": "natural_language_instruction", "action_key": "gripper_closedness_action", scale: 0.1},  
   }
