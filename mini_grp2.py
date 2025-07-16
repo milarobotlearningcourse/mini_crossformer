@@ -132,7 +132,7 @@ class Block(nn.Module):
         return x
 
 class GRP(nn.Module):
-  def __init__(self, dataset, cfg, mlp_ratio=4):
+  def __init__(self, cfg, mlp_ratio=4):
     super(GRP, self).__init__()
     # self._dataset = dataset
     self._cfg = cfg
@@ -299,7 +299,7 @@ def my_main(cfg: DictConfig):
         text_model = T5ForConditionalGeneration.from_pretrained(cfg.dataset.t5_version)
 
     cBuffer = preprocess_data(cfg, device)
-    model = GRP(cBuffer, cfg)
+    model = GRP(cfg)
     model.to(device)
     print(sum(p.numel() for p in model.parameters())/1e6, 'M parameters')
     ## Print the amount of memory used by the model
@@ -334,7 +334,8 @@ def my_main(cfg: DictConfig):
             print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, memory {torch.cuda.memory_allocated(device) / 1e6:.2f} MB")
             if not cfg.testing:
                 wandb.log({"train loss": losses['train'], "val loss": losses['val']})
-            torch.save(model, "./miniGRP.pth")
+            torch.save(model, "/home/mila/g/glen.berseth/playground/mini-grp/miniGRP.pth")
+            print("Model saved to /home/mila/g/glen.berseth/playground/mini-grp/miniGRP.pth")
         if cfg.simEval and (iter % cfg.eval_vid_iters == 0): ## Do this eval infrequently because it takes a fiar bit of compute
             eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, 
                               cBuffer, wandb=wandb, iter_=iter, tokenizer=tokenizer, text_model=text_model)

@@ -122,7 +122,7 @@ class CircularBuffer:
         self._decode_action = lambda binN: (binN * action_std) + action_mean  # Undo mapping to [-1, 1]
 
         self._dataset_indecies = self._cfg.dataset.dataset_indicies
-        if self._cfg.dataset.load_dataset:
+        if self._cfg.dataset.load_dataset is True:
             # Load the dataset from a file
             import datasets
             dataset = datasets.load_dataset(self._cfg.dataset.to_name, split='train')
@@ -147,13 +147,15 @@ class CircularBuffer:
                           )
                 # self.add(dataset_tmp["img"][i], , goal, goal_img, language_instruction)
             print("Loaded dataset with size:", self._count)
+        elif self._cfg.dataset.load_dataset == "skip":
+            pass
         else:
             get_multi_dataset_portion(self._builders, self, self._cfg)
 
     def add(self, obs, action, goal, goal_img, language_instruction=None, terminal=0):
         """ Add an observation, action, goal, goal image, rotation delta, and open gripper state to the buffer."""
     
-        self._dataset_tmp["img"][self._index] = torch.tensor(obs, dtype=torch.uint8, device=self._cfg.device)
+        self._dataset_tmp["img"][self._index] = torch.tensor(np.array(obs), dtype=torch.uint8, device=self._cfg.device)
         self._dataset_tmp["action"][self._index] = torch.tensor(action, dtype=torch.float, device=self._cfg.device)
         ## Make goal embeddings of a fixed length and fill in the earlier chunks with the true goal data
         
@@ -168,7 +170,7 @@ class CircularBuffer:
         goal_ = goal[:self._cfg.max_block_size] + goal_[len(goal):self._cfg.max_block_size] 
         # assert len(goal_) == self._cfg.max_block_size
         self._dataset_tmp["goal"][self._index] = torch.tensor(self._encode_txt(goal_), dtype=torch.float, device=self._cfg.device)
-        self._dataset_tmp["goal_img"][self._index] = torch.tensor(goal_img, dtype=torch.uint8, device=self._cfg.device)
+        self._dataset_tmp["goal_img"][self._index] = torch.tensor(np.array(goal_img), dtype=torch.uint8, device=self._cfg.device)
         self._dataset_tmp["terminal"][self._index] = torch.tensor(terminal, dtype=torch.uint8, device=self._cfg.device)
         self._count += 1
         self._index = (self._index + 1) % self._size

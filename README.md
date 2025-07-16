@@ -59,6 +59,11 @@ pip install -e .
 
 conda install conda-forge::vulkan-tools conda-forge::vulkan-headers
 
+## Install LIBERO
+
+pip install cmake==3.24.3
+
+https://github.com/Lifelong-Robot-Learning/LIBERO
 
 ## Running the code
 
