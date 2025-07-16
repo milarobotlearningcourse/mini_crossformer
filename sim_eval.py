@@ -54,7 +54,8 @@ def eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, buffer,
         wandb.log({"example": wandb.Video(log_dir+"/sim-env-"+str(iter_)+".mp4")})
 
 
-def eval_libero(buffer, model, device, cfg):
+def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./", 
+                tokenizer=None, text_model=None, wandb=None):
         # cfg, model, device, log_dir, env, env_unwrapped, buffer,
         #               wandb, iter_, tokenizer=None, text_model=None):
     
@@ -65,7 +66,7 @@ def eval_libero(buffer, model, device, cfg):
 
 
     benchmark_dict = benchmark.get_benchmark_dict()
-    task_suite_name = "libero_10" # can also choose libero_spatial, libero_object, etc.
+    task_suite_name = "libero_90" # can also choose libero_spatial, libero_object, etc.
     task_suite = benchmark_dict[task_suite_name]()
 
     # retrieve a specific task
@@ -92,8 +93,11 @@ def eval_libero(buffer, model, device, cfg):
 
     txt_goal = np.array([buffer._encode_txt(task_description)[:cfg.max_block_size]])
     dummy_action = [0.] * 7
-    image = obs["agentview_image"]
-    for step in range(10):
+    # image = obs["agentview_image"]
+    frames = []
+    rewards = []
+    for step in range(100):
+        image = obs["agentview_image"]
         action, loss = model.forward(torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image))])).to(device)
                     # ,torch.tensor(txt_goal, dtype=torch.float).to(device) ## There can be issues here if th text is shorter than any example in the dataset
                     ,torch.tensor(txt_goal, dtype=torch.long).to(device) ## There can be issues here if th text is shorter than any example in the dataset
@@ -101,7 +105,18 @@ def eval_libero(buffer, model, device, cfg):
                     )
 
         action = buffer._decode_action(action).cpu().detach().numpy()[0] ## Add in the gripper close action
+        frames.append(image)
         obs, reward, done, info = env.step(action)
+        rewards.append(reward)
+
+    print(f"avg reward {np.mean(rewards):.8f}")
+    if not cfg.testing:
+        wandb.log({"avg reward": np.mean(rewards)})
+    import moviepy.editor as mpy
+    clip = mpy.ImageSequenceClip(list(frames), fps=20)
+    clip.write_videofile(log_dir+"/sim-env-"+str(iter_)+".mp4", fps=20)
+    if not cfg.testing:
+        wandb.log({"example": wandb.Video(log_dir+"/sim-env-"+str(iter_)+".mp4")})
     env.close()
 
 import hydra, json

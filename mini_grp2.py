@@ -313,7 +313,7 @@ def my_main(cfg: DictConfig):
     import torch.optim.lr_scheduler as lr_scheduler
     scheduler = lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.1, total_iters=cfg.max_iters)
 
-    if cfg.simEval:
+    if cfg.simEval == "simpler_env":
         import simpler_env
         task_name = "widowx_carrot_on_plate"  # @param ["google_robot_pick_coke_can", "google_robot_move_near", "google_robot_open_drawer", "google_robot_close_drawer", "widowx_spoon_on_towel", "widowx_carrot_on_plate", "widowx_stack_cube", "widowx_put_eggplant_in_basket"]
         if 'env' in locals():
@@ -334,10 +334,15 @@ def my_main(cfg: DictConfig):
             print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, memory {torch.cuda.memory_allocated(device) / 1e6:.2f} MB")
             if not cfg.testing:
                 wandb.log({"train loss": losses['train'], "val loss": losses['val']})
-            torch.save(model, "/home/mila/g/glen.berseth/playground/mini-grp/miniGRP.pth")
-            print("Model saved to /home/mila/g/glen.berseth/playground/mini-grp/miniGRP.pth")
+            torch.save(model, "miniGRP.pth")
+            print("Model saved to miniGRP.pth")
         if cfg.simEval and (iter % cfg.eval_vid_iters == 0): ## Do this eval infrequently because it takes a fiar bit of compute
-            eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, 
+            if cfg.simEval == "libero":
+                from sim_eval import eval_libero
+                eval_libero(cBuffer, model, device=cfg.device, cfg=cfg, iter_=iter, log_dir=log_dir, 
+                            tokenizer=tokenizer, text_model=text_model, wandb=wandb)
+            elif cfg.simEval == "simpler_env":
+                eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, 
                               cBuffer, wandb=wandb, iter_=iter, tokenizer=tokenizer, text_model=text_model)
 
 

@@ -12,5 +12,5 @@ strings=(
 for env in "${strings[@]}"; do
     # echo "$env"
     # sbatch --array=1-3 --export=ALL,ENV_ID=$env,ARGSS='max_iters=50000' launchGPU.sh
-    sbatch --array=1-3 --export=ALL,ENV_ID=$env,ARGSS='max_iters=50000 database.encode_with_t5=true max_block_size=true' launchGPU.sh
+    sbatch --array=1-2 --export=ALL,ENV_ID=$env,ARGSS='max_iters=50000 database.encode_with_t5=false max_block_size=true' launchGPU.sh
 done

@@ -36,7 +36,7 @@ policy:
 n_embd: 256
 device: "cuda"
 testing: true
-simEval: false
+simEval: "libero" # "simpler_env" or "libero"
 eval_vid_iters: 2500
 gradient_accumulation_steps: 2
 
