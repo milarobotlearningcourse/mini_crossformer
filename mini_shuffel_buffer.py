@@ -208,7 +208,6 @@ class CircularBuffer:
             data = shared_queue.get() ## Update the data when messaged from the Queue
             if data is None:
                 break
-            start_ = self._dataset_indecies[self._cfg.dataset.from_name]["start"]
             ## Call function to swap out a portion of data.
             get_multi_dataset_portion(self._builders, self, self._cfg)
 
@@ -240,6 +239,13 @@ class CircularBuffer:
 
         ds = Dataset.from_dict(dataset_tmp)
 
+        a_std, a_mean = (self._dataset_tmp["action"][:self._count].std(axis=0) + 0.001) * 1.5, self._dataset_tmp["action"][:self._count].mean(axis=0)
+        print("action std:", a_std, "action mean:", a_mean)
+        self._cfg.env.action_std = a_std.cpu().numpy().tolist()
+        self._cfg.env.action_mean = a_mean.cpu().numpy().tolist()
+        ## Save the configuration to a file
+        with open('./config.json', 'w') as f:
+            json.dump(OmegaConf.to_container(self._cfg, resolve=True), f, indent=2)
         new_features = ds.features.copy()
         # new_features["img"] = Image()
         ds.cast(new_features)

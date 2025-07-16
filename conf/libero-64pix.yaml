@@ -30,7 +30,7 @@ eval_interval: 100
 learning_rate: 5e-5
 eval_iters: 200
 policy:
-  action_stacking: 2
+  action_stacking: 1
   obs_stacking: 1
 
 n_embd: 256
@@ -53,8 +53,24 @@ action_bins: 7
 action_dim: 7
 load_action_bounds: true
 env:
-  action_std: [0.016753544993060053, 0.023366538587021844, 0.020825098821764754, 0.04094312200887319, 0.0450425630283353, 0.07591476573186073, 1.0]
-  action_mean: [0.0005073429474377862, 0.0010121935122961018, 0.00047337321896007546, 0.0004149420738629149, -0.0018587493762149167, 0.0020303972612628974, 0.5]
+  action_std: [
+      0.02933819591999054,
+      0.10899123549461365,
+      0.043281685560941696,
+      0.021621741354465485,
+      0.022216500714421272,
+      0.16577237844467163,
+      1.3083502054214478
+    ]
+  action_mean: [
+      0.0016089589335024357,
+      -0.007886501029133797,
+      0.0017626108601689339,
+      -0.0006548810633830726,
+      0.00019355163385625929,
+      0.01792312227189541,
+      0.04585108533501625
+    ]
   gripper_closed_std: 1.0
 
 ## Model hyperparameters
@@ -80,9 +96,9 @@ dataset:
     # "/network/datasets/openxembodiment/datasets/stanford_robocook_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.3, dataset_key: "stanford_robocook_converted_externally_to_rlds", scale: 1.0},
     # "/network/datasets/openxembodiment/datasets/maniskill_dataset_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.3, dataset_key: "maniskill_dataset_converted_externally_to_rlds", scale: 1.0},
     # "/network/projects/real-g-grp/modified_libero_rlds": {"start": 0, size: 1000000, weight: 0.3, dataset_key: "maniskill_dataset_converted_externally_to_rlds", scale: 1.0},
-    # "gs://gresearch/robotics/bridge/0.1.0/": {"start": 11, size: 28935, weight: 0.5, dataset_key: "bridge_oxe", scale: 1.0},
-    # "gs://gresearch/robotics/stanford_robocook_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.5, dataset_key: "stanford_robocook_converted_externally_to_rlds", scale: 1.0},
-    # "gs://gresearch/robotics/maniskill_dataset_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.5, dataset_key: "maniskill_dataset_converted_externally_to_rlds", scale: 1.0},
+    "gs://gresearch/robotics/bridge/0.1.0/": {"start": 11, size: 28935, weight: 0.5, dataset_key: "bridge_oxe", scale: 1.0},
+    "gs://gresearch/robotics/stanford_robocook_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.5, dataset_key: "stanford_robocook_converted_externally_to_rlds", scale: 1.0},
+    "gs://gresearch/robotics/maniskill_dataset_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.5, dataset_key: "maniskill_dataset_converted_externally_to_rlds", scale: 1.0},
     # "/network/datasets/openxembodiment/datasets/language_table/0.0.1": {"start": 0, size: 1000000, weight: 0.5, "image_key": "rgb", "text_key": "instruction"},  
     # "/network/datasets/openxembodiment/datasets/kuka/0.1.0": {"start": 0, size: 1000000, weight: 0.5, "image_key": "image", "text_key": "natural_language_instruction", "action_key": "gripper_closedness_action", scale: 0.1},  
   }
