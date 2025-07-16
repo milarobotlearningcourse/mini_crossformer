@@ -12,13 +12,13 @@ import cv2
 
 
 @torch.no_grad()
-def estimate_loss(model):
+def estimate_loss(model, dataset):
     out = {}
     model.eval()
     for split in ['train', 'val']:
         losses = torch.zeros(model._cfg.eval_iters)
         for k in range(model._cfg.eval_iters):
-            X, x_goal, x_goal_img, Y = model._dataset.get_batch_grp(split, model._cfg, model._cfg.batch_size)
+            X, x_goal, x_goal_img, Y = dataset.get_batch_grp(split, model._cfg, model._cfg.batch_size)
             logits, loss = model(X, x_goal, x_goal_img, Y)
             losses[k] = loss.item()
         out[split] = losses.mean()
@@ -134,7 +134,7 @@ class Block(nn.Module):
 class GRP(nn.Module):
   def __init__(self, dataset, cfg, mlp_ratio=4):
     super(GRP, self).__init__()
-    self._dataset = dataset
+    # self._dataset = dataset
     self._cfg = cfg
     # [TODO]
     """
@@ -330,7 +330,7 @@ def my_main(cfg: DictConfig):
     for iter in range(cfg.max_iters):
 
         if iter % cfg.eval_interval == 0 or iter == cfg.max_iters - 1:
-            losses = estimate_loss(model)
+            losses = estimate_loss(model, cBuffer)
             print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, memory {torch.cuda.memory_allocated(device) / 1e6:.2f} MB")
             if not cfg.testing:
                 wandb.log({"train loss": losses['train'], "val loss": losses['val']})
