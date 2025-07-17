@@ -270,7 +270,8 @@ def get_dataset_portion(builder, cbuffer, start, end, cfg, dataset_name=None):
     # Loading data
     # create RLDS dataset builder
     for c in range(start, end, cfg.dataset.chunk_size):
-        datasetRemote = builder.as_dataset(split='train[' + str(c) + ':' + str(c + cfg.dataset.chunk_size) + ']')
+        end_ = min(c + cfg.dataset.chunk_size, end)
+        datasetRemote = builder.as_dataset(split='train[' + str(c) + ':' + str(end_) + ']')
         # print("loading dataset chunk:", c, "to", c + cfg.dataset.chunk_size)
         gc.collect()
         for episode in datasetRemote:
@@ -278,7 +279,7 @@ def get_dataset_portion(builder, cbuffer, start, end, cfg, dataset_name=None):
             ## https://github.com/openvla/openvla/blob/main/prismatic/vla/datasets/rlds/oxe/transforms.py
             episode = apply_transforms(episode, cfg, dataset_name)
             goal_img = cv2.resize(np.array(episode[-1]['observation']["image"], dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))  
-            # print("Ajout de", len(episode), "données à la circular buffer.")
+            # print("Ajout de", len(episode), "données à la buffer circular.")
             for i in range(len(episode)): ## Resize images to reduce computation
                 if (i+cfg.policy.action_stacking > len(episode)):
                     # print("Skipping index", i, "because action length is less than", cfg.policy.action_stacking)

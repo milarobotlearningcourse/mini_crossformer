@@ -14,4 +14,4 @@ module load cudatoolkit/12.1 miniconda/3 cuda/12.1.1/cudnn/9.3
 conda activate roble
 
 ## srun is needed to run the multiple tasks per GPU
-python mini-grp2.py r_seed=$SLURM_ARRAY_TASK_ID testing=false $ARGSS
+python mini_grp2.py r_seed=$SLURM_ARRAY_TASK_ID testing=false $ARGSS
