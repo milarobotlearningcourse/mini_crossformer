@@ -34,9 +34,7 @@ def get_patches_fast(images, cfg):
     patches = rearrange(images[:,:,:,:3], 'b (h p1) (w p2) c -> b (h w) (p1 p2 c)', p1 = patch_size, p2 = patch_size)
     if channels > 3:
         ## History stacking in the channel dimension for observations only, not goal images.
-        # patches_2 = rearrange(images[:,:,:,3:], 'b (h p1) (w p2) c -> b (h w) (p1 p2 c)', p1 = patch_size, p2 = patch_size)
         patches = rearrange(images, 'b (h p1) (w p2) (c hs) -> b (h w hs) (p1 p2 c)', p1 = patch_size, p2 = patch_size, hs=cfg.policy.obs_stacking) ## Stack the history in the channel dimension
-        # patches = torch.cat((patches, patches_2), dim=1) ## Conc
     return patches
 
 def calc_positional_embeddings(sequence_length, d):
