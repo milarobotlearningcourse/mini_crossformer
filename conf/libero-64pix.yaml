@@ -42,6 +42,7 @@ gradient_accumulation_steps: 2
 
 sim:
   eval_episodes: 2
+  eval_tasks: [0, 1, 2, 3, 4]
 
 # ------------
 

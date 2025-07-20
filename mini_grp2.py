@@ -29,7 +29,6 @@ def get_patches_fast(images, cfg):
     from einops import rearrange
     batch_size, height, width, channels = images.shape
     patch_size = cfg.patch_size ## n_patches = 8
-    patch_items = 192 ## 192 is the number of items in each patch (8 height * 8 width * 3 channels)
 
     patches = rearrange(images[:,:,:,:3], 'b (h p1) (w p2) c -> b (h w) (p1 p2 c)', p1 = patch_size, p2 = patch_size)
     if channels > 3:

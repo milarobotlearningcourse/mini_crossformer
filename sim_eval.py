@@ -1,6 +1,7 @@
 
 
 
+
 def eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, buffer,
                       wandb, iter_, tokenizer=None, text_model=None):
     from simpler_env.utils.env.observation_utils import get_image_from_maniskill2_obs_dict
@@ -53,6 +54,44 @@ def eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, buffer,
     if not cfg.testing:
         wandb.log({"example": wandb.Video(log_dir+"/sim-env-"+str(iter_)+".mp4")})
 
+import gymnasium as gym
+# --- History Stacking Wrapper ---
+class DictWrapper(gym.ObservationWrapper):
+    # from gymnasium.spaces import Box
+    """
+    A wrapper that grabs the observation from a specific key in the dictionary.
+    """
+    def __init__(self, env, obs_key=""):
+        # gym.Wrapper.__init__(self, env)
+        self.env = env
+        self.observation_space = gym.spaces.Box( 
+            low=0,
+            high=255,
+            shape=(128,128,3),  # Assuming the observation is an image of size 128x128 with 3 color channels
+            dtype=np.uint8)
+        self._obs_key = obs_key
+
+    def observation(self, observation):
+        """
+        This method is called by the gym.ObservationWrapper after the environment's
+        step or reset methods return an observation.
+        """
+        # Add the new observation to the history buffer
+        return observation[self._obs_key]
+    
+    def step(self, action):
+        """
+        Step the environment and return the observation from the specified key.
+        """
+        obs, reward, done, info = self.env.step(action) ## LIBERO does not return truncated
+        return obs[self._obs_key][::-1, :, :], reward, done, False, info ## Not sure why the image was upside down.
+
+    def reset(self, **kwargs):
+        """
+        Reset the environment and return the observation from the specified key.
+        """
+        obs = self.env.reset()
+        return obs[self._obs_key][::-1, :, :], {}
 
 def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./", 
                 tokenizer=None, text_model=None, wandb=None):
@@ -63,6 +102,8 @@ def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./",
     from libero.libero.envs import OffScreenRenderEnv
     import os
     from libero.libero.utils import get_libero_path
+    from gymnasium.wrappers import FrameStackObservation
+    from einops import rearrange
 
 
     benchmark_dict = benchmark.get_benchmark_dict()
@@ -70,7 +111,7 @@ def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./",
     task_suite = benchmark_dict[task_suite_name]()
 
     # retrieve a specific task
-    tasks = [0, 1, 2, 3, 4]
+    tasks = cfg.sim.eval_tasks
     for task_id in tasks:
         task = task_suite.get_task(task_id)
         task_name = task.name
@@ -87,28 +128,38 @@ def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./",
         }
         env = OffScreenRenderEnv(**env_args)
         env.seed(0)
-        obs = env.reset()
         init_states = task_suite.get_task_init_states(task_id) # for benchmarking purpose, we fix the a set of initial states
         init_state_id = 0
         env.set_init_state(init_states[init_state_id])
+        env = FrameStackObservation(DictWrapper(env, obs_key="agentview_image"), cfg.policy.obs_stacking) ## Stacking the observations
+        obs, info = env.reset()
 
         txt_goal = np.array([buffer._encode_txt(task_description)[:cfg.max_block_size]])
+        image_goal = obs.reshape((128, 128, 3*cfg.policy.obs_stacking))[:,:,:3] ## Assuming the observation is an image of size 128x128 with 3 color channels
         dummy_action = [0.] * 7
         # image = obs["agentview_image"]
         frames = []
         rewards = []
-        for step in range(250):
-            image = obs["agentview_image"]
-            action, loss = model.forward(torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image))])).to(device)
+        for step_ in range(250):
+            ## Reshape the image to the correct size and stack the hostory on the last channel dimension
+            image = obs[0]
+            # obs = obs.reshape((128, 128, 3*cfg.policy.obs_stacking)) ## Assuming the observation is an image of size 128x128 with 3 color channels  
+            obs = rearrange(obs, 't h w c -> h w (t c)', c=3, t=cfg.policy.obs_stacking) ## Rearranging the image to have the stacked history in the last channel dimension
+            # image = obs[:,:,:3] ## Remove the last dimension of the image color
+            action, loss = model.forward(torch.tensor(np.array([buffer._encode_state(buffer._resize_state(obs))])).to(device)
                         # ,torch.tensor(txt_goal, dtype=torch.float).to(device) ## There can be issues here if th text is shorter than any example in the dataset
                         ,torch.tensor(txt_goal, dtype=torch.long).to(device) ## There can be issues here if th text is shorter than any example in the dataset
-                        ,torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image))])).to(device) ## Not the correct goal image... Should mask this.
+                        ,torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image_goal))])).to(device) ## Not the correct goal image... Should mask this.
                         )
 
-            action = buffer._decode_action(action).cpu().detach().numpy()[0] ## Add in the gripper close action
+            action = buffer._decode_action(action[0,:7]).cpu().detach().numpy() ## Add in the gripper close action
             frames.append(image)
-            obs, reward, done, info = env.step(action)
+            x = env.step(action)
+            obs, reward, done, info = x[:4] 
             rewards.append(reward)
+            if done:
+                print("Episode finished after {} timesteps".format(step_))
+                break
 
         print(f"avg reward {np.mean(rewards):.8f}")
         if not cfg.testing:
