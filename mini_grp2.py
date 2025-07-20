@@ -334,6 +334,8 @@ def my_main(cfg: DictConfig):
             print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, memory {torch.cuda.memory_allocated(device) / 1e6:.2f} MB")
             if not cfg.testing:
                 wandb.log({"train loss": losses['train'], "val loss": losses['val']})
+
+        if iter % cfg.data_shuffel_interval == 0 or iter == cfg.max_iters - 1:
             torch.save(model, "miniGRP.pth")
             print("Model saved to miniGRP.pth")
         if cfg.simEval and (iter % cfg.eval_vid_iters == 0): ## Do this eval infrequently because it takes a fiar bit of compute

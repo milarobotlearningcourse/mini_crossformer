@@ -70,54 +70,55 @@ def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./",
     task_suite = benchmark_dict[task_suite_name]()
 
     # retrieve a specific task
-    task_id = 0
-    task = task_suite.get_task(task_id)
-    task_name = task.name
-    task_description = task.language
-    task_bddl_file = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
-    print(f"[info] retrieving task {task_id} from suite {task_suite_name}, the " + \
-        f"language instruction is {task_description}, and the bddl file is {task_bddl_file}")
+    tasks = [0, 1, 2, 3, 4]
+    for task_id in tasks:
+        task = task_suite.get_task(task_id)
+        task_name = task.name
+        task_description = task.language
+        task_bddl_file = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
+        print(f"[info] retrieving task {task_id} from suite {task_suite_name}, the " + \
+            f"language instruction is {task_description}, and the bddl file is {task_bddl_file}")
 
-    # step over the environment
-    env_args = {
-        "bddl_file_name": task_bddl_file,
-        "camera_heights": 128,
-        "camera_widths": 128
-    }
-    env = OffScreenRenderEnv(**env_args)
-    env.seed(0)
-    obs = env.reset()
-    init_states = task_suite.get_task_init_states(task_id) # for benchmarking purpose, we fix the a set of initial states
-    init_state_id = 0
-    env.set_init_state(init_states[init_state_id])
+        # step over the environment
+        env_args = {
+            "bddl_file_name": task_bddl_file,
+            "camera_heights": 128,
+            "camera_widths": 128
+        }
+        env = OffScreenRenderEnv(**env_args)
+        env.seed(0)
+        obs = env.reset()
+        init_states = task_suite.get_task_init_states(task_id) # for benchmarking purpose, we fix the a set of initial states
+        init_state_id = 0
+        env.set_init_state(init_states[init_state_id])
 
-    txt_goal = np.array([buffer._encode_txt(task_description)[:cfg.max_block_size]])
-    dummy_action = [0.] * 7
-    # image = obs["agentview_image"]
-    frames = []
-    rewards = []
-    for step in range(100):
-        image = obs["agentview_image"]
-        action, loss = model.forward(torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image))])).to(device)
-                    # ,torch.tensor(txt_goal, dtype=torch.float).to(device) ## There can be issues here if th text is shorter than any example in the dataset
-                    ,torch.tensor(txt_goal, dtype=torch.long).to(device) ## There can be issues here if th text is shorter than any example in the dataset
-                    ,torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image))])).to(device) ## Not the correct goal image... Should mask this.
-                    )
+        txt_goal = np.array([buffer._encode_txt(task_description)[:cfg.max_block_size]])
+        dummy_action = [0.] * 7
+        # image = obs["agentview_image"]
+        frames = []
+        rewards = []
+        for step in range(250):
+            image = obs["agentview_image"]
+            action, loss = model.forward(torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image))])).to(device)
+                        # ,torch.tensor(txt_goal, dtype=torch.float).to(device) ## There can be issues here if th text is shorter than any example in the dataset
+                        ,torch.tensor(txt_goal, dtype=torch.long).to(device) ## There can be issues here if th text is shorter than any example in the dataset
+                        ,torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image))])).to(device) ## Not the correct goal image... Should mask this.
+                        )
 
-        action = buffer._decode_action(action).cpu().detach().numpy()[0] ## Add in the gripper close action
-        frames.append(image)
-        obs, reward, done, info = env.step(action)
-        rewards.append(reward)
+            action = buffer._decode_action(action).cpu().detach().numpy()[0] ## Add in the gripper close action
+            frames.append(image)
+            obs, reward, done, info = env.step(action)
+            rewards.append(reward)
 
-    print(f"avg reward {np.mean(rewards):.8f}")
-    if not cfg.testing:
-        wandb.log({"avg reward": np.mean(rewards)})
-    import moviepy.editor as mpy
-    clip = mpy.ImageSequenceClip(list(frames), fps=20)
-    clip.write_videofile(log_dir+"/sim-env-"+str(iter_)+".mp4", fps=20)
-    if not cfg.testing:
-        wandb.log({"example": wandb.Video(log_dir+"/sim-env-"+str(iter_)+".mp4")})
-    env.close()
+        print(f"avg reward {np.mean(rewards):.8f}")
+        if not cfg.testing:
+            wandb.log({"avg reward_"+str(task_id): np.mean(rewards)})
+        import moviepy.editor as mpy
+        clip = mpy.ImageSequenceClip(list(frames), fps=20)
+        clip.write_videofile(log_dir+"/sim-libero-90-"+str(task_id)+"-"+str(iter_)+".mp4", fps=20)
+        if not cfg.testing:
+            wandb.log({"example": wandb.Video(log_dir+"/sim-libero-90-"+str(task_id)+"-"+str(iter_)+".mp4")})
+        env.close()
 
 import hydra, json
 from omegaconf import DictConfig, OmegaConf

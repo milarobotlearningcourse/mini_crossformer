@@ -255,7 +255,7 @@ class CircularBuffer:
         # ds.save_to_disk("datasets/" + cfg.dataset.to_name + ".hf")
         ds.push_to_hub(self._cfg.dataset.to_name)
 
-def get_dataset_portion(builder, cbuffer, start, end, cfg, dataset_name=None):
+def get_dataset_portion(builder, cbuffer, cfg, list_, dataset_name=None):
     """
     Helper function to get a portion of the dataset.
     """
@@ -269,10 +269,9 @@ def get_dataset_portion(builder, cbuffer, start, end, cfg, dataset_name=None):
     # Train and test splits
     # Loading data
     # create RLDS dataset builder
-    for c in range(start, end, cfg.dataset.chunk_size):
-        end_ = min(c + cfg.dataset.chunk_size, end)
-        datasetRemote = builder.as_dataset(split='train[' + str(c) + ':' + str(end_) + ']')
-        # print("loading dataset chunk:", c, "to", c + cfg.dataset.chunk_size)
+    for c in list(list_):
+        datasetRemote = builder.as_dataset(split='train[' + str(c) + ':' + str(c+1) + ']') ## Most likely a very slow way to get data from the dataset, but it is a better mix
+        # datasetRemote = builder.as_dataset(split='train[3:4]')
         gc.collect()
         for episode in datasetRemote:
             episode = list(episode['steps'])
@@ -313,36 +312,27 @@ def get_multi_dataset_portion(builders, cbuffer, cfg):
     # create RLDS dataset builder
     for dataset_name, builder in builders.items():
         print("Loading dataset:", dataset_name)
-        start = cfg.dataset.dataset_indicies[dataset_name]["start"]
-        end = start + int(cfg.dataset.chunk_size * cfg.dataset.dataset_indicies[dataset_name]["weight"])
-        print("start:", start, "end:", end, "dataset_name:", dataset_name)
-        print("start_", start, " end_", end, " size_ ", cbuffer._dataset_indecies[dataset_name]["size"]
+        ## Get the number of items in the dataset
+        size = builder.info.splits["train"].num_examples
+        print(" size_ ", size
                 , " count_", cbuffer._count, " index_", cbuffer._index)
-        if start >= cbuffer._dataset_indecies[dataset_name]["size"]: ## If we have reached the end of the dataset, reset the start index
-            cbuffer._dataset_indecies[dataset_name] = 0
-        else:
-            cfg.dataset.dataset_indicies[dataset_name]["start"] = end
-        get_dataset_portion(builders[dataset_name], cbuffer, start, end, cfg, dataset_name=dataset_name)
+        ix = np.random.randint(size-1, size=(int(cfg.dataset.num_episodes * cfg.dataset.dataset_indicies[dataset_name]["weight"]),))
+        get_dataset_portion(builder, cbuffer, cfg, dataset_name=dataset_name, list_=ix)
 
-@hydra.main(config_path="./conf", config_name="libero-64pix")
+@hydra.main(config_path="./conf", config_name="libero-64pix-dataset")
 def my_main(cfg: DictConfig):
     import tensorflow_datasets as tfds
     import numpy as np
     from tqdm import tqdm, trange
-    import cv2
-    from PIL import Image
     # ------------
     # Train and test splits
     # Loading data
     # create RLDS dataset builder
     cbuffer = CircularBuffer(cfg.dataset.buffer_size, cfg)
-    for i in range(0, cfg.dataset.num_episodes, cfg.dataset.chunk_size):
-        # get_dataset_portion(builder, cbuffer, 0, cfg.dataset.num_episodes, cfg)
-        # cbuffer.shuffle()
-        ## Call function to swap out a portion of data.
-        get_multi_dataset_portion(cbuffer._builders, cbuffer, cbuffer._cfg)
-        print("Dataset shape:", len(cbuffer._dataset_tmp["img"]))
-        print("Dataset len:", cbuffer._count)
+
+    get_multi_dataset_portion(cbuffer._builders, cbuffer, cbuffer._cfg)
+    print("Dataset shape:", len(cbuffer._dataset_tmp["img"]))
+    print("Dataset len:", cbuffer._count)
 
     if cfg.dataset.save_initial_dataset:
         print("Saving dataset to:", cfg.dataset.to_name)
