@@ -176,16 +176,32 @@ class CircularBuffer:
         self._index = (self._index + 1) % self._size
 
     def get_batch_grp(self, split, cfg, batch_size):
+        # from torchvision import transforms
+        from torchvision.transforms import v2 # Recommend v2 for new code
+        from einops import rearrange
+        # transform_crop_scale = transforms.Compose([
+        #     transforms.RandomResizedCrop(size=(128, 128), scale=(0.8, 1.0), ratio=(0.75, 1.33)),
+        #     transforms.ToTensor() # Convert PIL Image to PyTorch Tensor
+        # ])
+        transform_crop_scale = v2.Compose([
+            v2.RandomResizedCrop(size=(64, 64), scale=(0.8, 1.0), ratio=(0.75, 1.33)),
+            v2.ToDtype(torch.float32, scale=True) # Convert to float [0,1] after crop/resize
+        ])
         # generate a small batch of inputs x and targets y
         # data = dataset['train'] if split == 'train' else dataset['test']
         data = self._dataset_tmp
         ix = np.random.randint(min(self._count, self._size)-(max(cfg.policy.action_stacking, cfg.policy.obs_stacking)-1), size=(batch_size,))
         x = torch.tensor(self._encode_state(data["img"][ix]), dtype=torch.float, device=cfg.device)
+        ## Add time axis to the images x
+        x = x.unsqueeze(1).permute(0,1,4,2,3)  # Add a time dimension and shape for torchvision
         if cfg.policy.obs_stacking > 1:
-            obs_ = torch.tensor(data["img"][ix], dtype=torch.float, device=cfg.device)
+            # obs_ = transform_crop_scale(torch.tensor(data["img"][ix], dtype=torch.float, device=cfg.device).permute(0, 3, 1, 2)).permute(0, 2, 3, 1) # Convert to [B, C, H, W] format for torchvision transforms, and back.
+            obs_ = torch.tensor(data["img"][ix], dtype=torch.float, device=cfg.device).unsqueeze(1).permute(0, 1, 4, 2, 3) # Convert to [B, T, C, H, W] format for torchvision transforms, and back.
             for i in range(1, cfg.policy.obs_stacking): ## This is slow but works.
-                obs_ = torch.concatenate((obs_, data["img"][ix+i]), axis=-1) 
-            x = torch.tensor(self._encode_state(obs_), dtype=torch.float, device=cfg.device)
+                obs_ = torch.concatenate((obs_, data["img"][ix+i].unsqueeze(1).permute(0, 1, 4, 2, 3)), axis=1) ## concatenate along the time dimension 
+            obs_ = transform_crop_scale(obs_).permute(0, 1, 3, 4, 2) # Convert to [B, T, C, H, W] format for torchvision transforms, and back.
+            x = rearrange(obs_, 'b t h w c -> b h w (c t)', c=3, t=cfg.policy.obs_stacking) ## Rearranging the image to have the stacked history in the last channel dimension)  # Flatten the time dimension for batching
+            x = torch.tensor(self._encode_state(x), dtype=torch.float, device=cfg.device)
         else:
             x = torch.tensor(self._encode_state(data["img"][ix]), dtype=torch.float, device=cfg.device)
         if cfg.dataset.encode_with_t5:
