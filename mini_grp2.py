@@ -332,8 +332,9 @@ def my_main(cfg: DictConfig):
                 wandb.log({"train loss": losses['train'], "val loss": losses['val']})
 
         if iter % cfg.data_shuffel_interval == 0 or iter == cfg.max_iters - 1:
-            torch.save(model, "/home/mila/g/glen.berseth/playground/mini-grp/miniGRP.pth")
-            print("Model saved to /home/mila/g/glen.berseth/playground/mini-grp/miniGRP.pth")
+            path_ = "./miniGRP.pth"
+            torch.save(model, path_)
+            print("Model saved to " + path_)
         if cfg.simEval and (iter % cfg.eval_vid_iters == 0): ## Do this eval infrequently because it takes a fiar bit of compute
             if cfg.simEval == "libero":
                 from sim_eval import eval_libero

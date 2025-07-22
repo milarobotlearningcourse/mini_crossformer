@@ -1,6 +1,7 @@
 
 matplotlib
 rlds 
+gymnasium==1.0.0
 dm-reverb 
 moviepy==1.0.3
 numpy==1.26.4
