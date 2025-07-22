@@ -10,7 +10,6 @@ import numpy as np
 from tqdm import tqdm, trange
 import cv2
 
-
 @torch.no_grad()
 def estimate_loss(model, dataset):
     out = {}
@@ -333,8 +332,8 @@ def my_main(cfg: DictConfig):
                 wandb.log({"train loss": losses['train'], "val loss": losses['val']})
 
         if iter % cfg.data_shuffel_interval == 0 or iter == cfg.max_iters - 1:
-            torch.save(model, "miniGRP.pth")
-            print("Model saved to miniGRP.pth")
+            torch.save(model, "/home/mila/g/glen.berseth/playground/mini-grp/miniGRP.pth")
+            print("Model saved to /home/mila/g/glen.berseth/playground/mini-grp/miniGRP.pth")
         if cfg.simEval and (iter % cfg.eval_vid_iters == 0): ## Do this eval infrequently because it takes a fiar bit of compute
             if cfg.simEval == "libero":
                 from sim_eval import eval_libero

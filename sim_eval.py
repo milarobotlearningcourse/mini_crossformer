@@ -84,7 +84,7 @@ class DictWrapper(gym.ObservationWrapper):
         Step the environment and return the observation from the specified key.
         """
         obs, reward, done, info = self.env.step(action) ## LIBERO does not return truncated
-        return obs[self._obs_key][::-1, :, :], reward, done, False, info ## Not sure why the image was upside down.
+        return obs[self._obs_key][::-1, :, :], reward, done, False, obs ## Not sure why the image was upside down.
 
     def reset(self, **kwargs):
         """
@@ -135,11 +135,15 @@ def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./",
         obs, info = env.reset()
 
         txt_goal = np.array([buffer._encode_txt(task_description)[:cfg.max_block_size]])
+        if cfg.dataset.encode_with_t5:
+            input_ids = tokenizer(task_description, return_tensors="pt").input_ids
+            txt_goal = [[text_model.encoder(input_ids).last_hidden_state.detach().numpy()[0, -1]]] ## All just to trim the tensor down to the min size in the dataset
         image_goal = obs.reshape((128, 128, 3*cfg.policy.obs_stacking))[:,:,:3] ## Assuming the observation is an image of size 128x128 with 3 color channels
         dummy_action = [0.] * 7
         # image = obs["agentview_image"]
         frames = []
         rewards = []
+        infos = []
         for step_ in range(250):
             ## Reshape the image to the correct size and stack the hostory on the last channel dimension
             image = obs[0]
@@ -147,23 +151,40 @@ def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./",
             obs = rearrange(obs, 't h w c -> h w (t c)', c=3, t=cfg.policy.obs_stacking) ## Rearranging the image to have the stacked history in the last channel dimension
             # image = obs[:,:,:3] ## Remove the last dimension of the image color
             action, loss = model.forward(torch.tensor(np.array([buffer._encode_state(buffer._resize_state(obs))])).to(device)
-                        # ,torch.tensor(txt_goal, dtype=torch.float).to(device) ## There can be issues here if th text is shorter than any example in the dataset
-                        ,torch.tensor(txt_goal, dtype=torch.long).to(device) ## There can be issues here if th text is shorter than any example in the dataset
+                        ,torch.tensor(txt_goal, dtype=torch.float).to(device) ## There can be issues here if th text is shorter than any example in the dataset
+                        # ,torch.tensor(txt_goal, dtype=torch.long).to(device) ## There can be issues here if th text is shorter than any example in the dataset
                         ,torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image_goal))])).to(device) ## Not the correct goal image... Should mask this.
                         )
 
             action = buffer._decode_action(action[0,:7]).cpu().detach().numpy() ## Add in the gripper close action
             frames.append(image)
             x = env.step(action)
-            obs, reward, done, info = x[:4] 
+            obs, reward, done, truncated, info = x
             rewards.append(reward)
+            infos.append(info)
             if done:
                 print("Episode finished after {} timesteps".format(step_))
                 break
 
         print(f"avg reward {np.mean(rewards):.8f}")
+        detail_name = "akita_black_bowl_1_to_robot0_eef_pos"
+        print({"avg "+detail_name+" for task "+str(task_id): np.mean([np.sum(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
+        detail_name = "butter_1_to_robot0_eef_pos"
+        print({"avg "+detail_name+" for task "+str(task_id): np.mean([np.sum(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
+        detail_name = "butter_2_to_robot0_eef_pos"
+        print({"avg "+detail_name+" for task "+str(task_id): np.mean([np.sum(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
+        detail_name = "chocolate_pudding_1_to_robot0_eef_pos"
+        print({"avg "+detail_name+" for task "+str(task_id): np.mean([np.sum(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
         if not cfg.testing:
             wandb.log({"avg reward_"+str(task_id): np.mean(rewards)})
+            detail_name = "akita_black_bowl_1_to_robot0_eef_pos"
+            wandb.log({"avg "+detail_name+" for task "+str(task_id): np.mean([np.sum(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
+            detail_name = "butter_1_to_robot0_eef_pos"
+            wandb.log({"avg "+detail_name+" for task "+str(task_id): np.mean([np.sum(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
+            detail_name = "butter_2_to_robot0_eef_pos"
+            wandb.log({"avg "+detail_name+" for task "+str(task_id): np.mean([np.sum(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
+            detail_name = "chocolate_pudding_1_to_robot0_eef_pos"
+            wandb.log({"avg "+detail_name+" for task "+str(task_id): np.mean([np.sum(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
         import moviepy.editor as mpy
         clip = mpy.ImageSequenceClip(list(frames), fps=20)
         clip.write_videofile(log_dir+"/sim-libero-90-"+str(task_id)+"-"+str(iter_)+".mp4", fps=20)
@@ -177,9 +198,7 @@ from mini_grp2 import *
 
 @hydra.main(config_path="./conf", config_name="libero-64pix")
 def my_main(cfg: DictConfig):
-    import tensorflow_datasets as tfds
-    import numpy as np
-    from tqdm import tqdm, trange    
+    import tensorflow_datasets as tfds  
     from mini_shuffel_buffer import CircularBuffer
     import torch
     # ------------
@@ -190,8 +209,15 @@ def my_main(cfg: DictConfig):
     cBuffer = CircularBuffer(cfg.dataset.buffer_size, cfg)
     model = GRP(cfg)
     model_ = torch.load("/home/mila/g/glen.berseth/playground/mini-grp/miniGRP.pth")
+    model_._cgf = cfg
 
-    results = eval_libero(cBuffer, model_.to(cfg.device), device=cfg.device, cfg=cfg)
+    if cfg.dataset.encode_with_t5: ## Load T5 model
+        from transformers import T5Tokenizer, T5ForConditionalGeneration
+        tokenizer = T5Tokenizer.from_pretrained(cfg.dataset.t5_version)
+        text_model = T5ForConditionalGeneration.from_pretrained(cfg.dataset.t5_version)
+
+    results = eval_libero(cBuffer, model_.to(cfg.device), device=cfg.device, cfg=cfg,
+                          iter_=0, tokenizer=tokenizer, text_model=text_model, wandb=None)
     # cbuffer.save(cfg.dataset.to_name)
 
 

@@ -80,6 +80,7 @@ class CircularBuffer:
                             "pose": torch.tensor(np.zeros(shape=(self._size, len(self._cfg.env.action_std)),), dtype=torch.float, device=self._cfg.device),
                             "action": torch.tensor(np.zeros(shape=(self._size, len(self._cfg.env.action_std)),), dtype=torch.float, device=self._cfg.device),
                             "goal": torch.tensor(np.zeros(shape=(self._size, self._cfg.max_block_size)), dtype=torch.float, device=self._cfg.device), 
+                            "goal_text_full": ["" for _ in range(self._size)], # This is a list of strings, not a tensor
                             "goal_img": torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.uint8, device=self._cfg.device),
                             # "rotation_delta": [], "open_gripper": [] 
                             "t5_language_embedding": torch.tensor(np.zeros(shape=(self._size, 1, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device) if self._cfg.dataset.encode_with_t5 else None,
@@ -130,7 +131,8 @@ class CircularBuffer:
                 "img": np.array(dataset["img"]),
                 "action": np.array(dataset["action"]),
                 "goal_img": np.array(dataset["goal_img"]),
-                "goal": dataset["goal"]
+                "goal": dataset["goal"],
+                "t5_language_embedding": dataset["t5_language_embedding"]
             }
             for i in range(len(dataset_tmp["img"])):
                 if len(dataset_tmp["action"][i:i+self._cfg.policy.action_stacking]) < self._cfg.policy.action_stacking:
@@ -142,7 +144,7 @@ class CircularBuffer:
                           dataset_tmp["action"][i],
                           dataset_tmp["goal"][i], 
                           dataset_tmp["goal_img"][i],
-                        #   language_instruction=dataset["language_instruction"][i] if cfg.dataset.encode_with_t5 else None
+                          language_instruction=dataset_tmp["t5_language_embedding"][i] if cfg.dataset.encode_with_t5 else None,
                         terminal=0
                           )
                 # self.add(dataset_tmp["img"][i], , goal, goal_img, language_instruction)
@@ -157,14 +159,17 @@ class CircularBuffer:
     
         self._dataset_tmp["img"][self._index] = torch.tensor(np.array(obs), dtype=torch.uint8, device=self._cfg.device)
         self._dataset_tmp["action"][self._index] = torch.tensor(action, dtype=torch.float, device=self._cfg.device)
+        self._dataset_tmp["goal_text_full"][self._index] = goal  # Store the full goal text
         ## Make goal embeddings of a fixed length and fill in the earlier chunks with the true goal data
         
         if self._cfg.dataset.encode_with_t5:
-            goal__ = np.zeros((self._cfg.n_embd))
-            input_ids = self._tokenizer(goal, return_tensors="pt").input_ids
-            goal_t = self._model.encoder(input_ids).last_hidden_state.detach().cpu().numpy()[0, -1] ## Get the goal embedding
-            # goal__[:len(goal_t[0]), :] = goal_t[0][:self._cfg.max_block_size] ## Overwrite just the zeros up to the size of this vector, smaller vectors will have < max_block_size
-            self._dataset_tmp["t5_language_embedding"][self._index] = torch.tensor(goal_t, dtype=torch.float, device=self._cfg.device)
+            if language_instruction is not None:
+                self._dataset_tmp["t5_language_embedding"][self._index] = torch.tensor(language_instruction, dtype=torch.float, device=self._cfg.device)
+            else:
+                input_ids = self._tokenizer(goal, return_tensors="pt").input_ids
+                goal_t = self._model.encoder(input_ids).last_hidden_state.detach().cpu().numpy()[0, -1] ## Get the goal embedding
+                # goal__[:len(goal_t[0]), :] = goal_t[0][:self._cfg.max_block_size] ## Overwrite just the zeros up to the size of this vector, smaller vectors will have < max_block_size
+                self._dataset_tmp["t5_language_embedding"][self._index] = torch.tensor(goal_t, dtype=torch.float, device=self._cfg.device)
         
         goal_ = " " * self._cfg.max_block_size
         goal_ = goal[:self._cfg.max_block_size] + goal_[len(goal):self._cfg.max_block_size] 
@@ -246,8 +251,6 @@ class CircularBuffer:
         for i in range(self._count):
             dataset_tmp["img"].append(Image.fromarray(self._dataset_tmp["img"][i].cpu().numpy().astype('uint8')))
             dataset_tmp["action"].append(self._dataset_tmp["action"][i].cpu().numpy())
-            # dataset_tmp["rotation_delta"].append(self._dataset_tmp[i]['action']['rotation_delta'])
-            # dataset_tmp["open_gripper"].append([np.array(self._dataset_tmp[i]['action']['open_gripper'], dtype=np.uint8)])
             dataset_tmp["goal"].append(self._decode_txy(self._dataset_tmp['goal'][i].cpu().numpy()))
             dataset_tmp["goal_img"].append(Image.fromarray(self._dataset_tmp["goal_img"][i].cpu().numpy().astype('uint8') ))
 
@@ -277,9 +280,7 @@ def get_dataset_portion(builder, cbuffer, cfg, list_, dataset_name=None):
     """
     import tensorflow_datasets as tfds
     import numpy as np
-    from tqdm import tqdm, trange
     import cv2
-    from PIL import Image
     from datasets import load_dataset
     # ------------
     # Train and test splits
@@ -303,10 +304,7 @@ def get_dataset_portion(builder, cbuffer, cfg, list_, dataset_name=None):
                 cbuffer.add(obs = obs, 
                             action = episode[i]['action'],
                             goal= episode[i]['observation']["natural_language_instruction"].numpy().decode(),
-                            # goal=episode[i]['observation']['natural_language_instruction'],
                             goal_img=goal_img,
-                            # rotation_delta=episode[i]['action']['rotation_delta'], 
-                            # language_instruction=episode[i]['observation']['natural_language_instruction'].numpy().decode()
                             terminal = 1 if i == len(episode) - 1 else 0
                             )
     print("A terminé le mélange.")
@@ -332,7 +330,10 @@ def get_multi_dataset_portion(builders, cbuffer, cfg):
         size = builder.info.splits["train"].num_examples
         print(" size_ ", size
                 , " count_", cbuffer._count, " index_", cbuffer._index)
-        ix = np.random.randint(size-1, size=(int(cfg.dataset.num_episodes * cfg.dataset.dataset_indicies[dataset_name]["weight"]),))
+        ix = np.random.randint(size-1, size=(int(cfg.dataset.num_episodes * 
+                                                 cfg.dataset.dataset_indicies[dataset_name]["weight"] * 
+                                                 (1.0/len(cfg.dataset.dataset_indicies)))
+                                                 ))
         get_dataset_portion(builder, cbuffer, cfg, dataset_name=dataset_name, list_=ix)
 
 @hydra.main(config_path="./conf", config_name="libero-64pix-dataset")
