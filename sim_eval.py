@@ -6,10 +6,16 @@ def eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, buffer,
                       wandb, iter_, tokenizer=None, text_model=None):
     from simpler_env.utils.env.observation_utils import get_image_from_maniskill2_obs_dict
     print("Evaluating model in sim environment")
+    from collections import deque
+    from einops import rearrange
 
     rewards = []
     for j in range(cfg.sim.eval_episodes): ## Better to eval over a few different goal configurations
         obs, reset_info = env.reset()
+        obs_hist = deque(maxlen=3)
+        obs_hist.append(obs['image']['base_camera']["rgb"])
+        obs_hist.append(obs['image']['base_camera']["rgb"])
+        obs_hist.append(obs['image']['base_camera']["rgb"])
         instruction = env_unwrapped.get_language_instruction()
         print("Reset info", reset_info)
         print("Instruction", instruction)
@@ -30,13 +36,18 @@ def eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, buffer,
             image = get_image_from_maniskill2_obs_dict(env_unwrapped, obs)
             image = image[:,:,:3] ## Remove last dimension of image color
             
+            obs_hist.append(obs['image']['base_camera']["rgb"]) ## Add the new observation to the history buffer
+            # obs = [obs_["image"] for obs_ in obs] # obs is a list of dicts
+            image = np.stack(obs_hist, axis=-1)  # stack along the last dimension
+            image = rearrange(image, 'h w c t -> h w (c t)')  # add batch dimension
+            
             action, loss = model.forward(torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image))])).to(device)
                                 # ,torch.tensor(txt_goal, dtype=torch.float).to(device) ## There can be issues here if th text is shorter than any example in the dataset
                                 ,torch.tensor(txt_goal, dtype=torch.long).to(device) ## There can be issues here if th text is shorter than any example in the dataset
-                                ,torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image))])).to(device) ## Not the correct goal image... Should mask this.
+                                ,torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image[:,:,:3]))])).to(device) ## Not the correct goal image... Should mask this.
                                 )
             
-            action = buffer._decode_action(action.cpu().detach().numpy()[0]) ## Add in the gripper close action
+            action = buffer._decode_action(action[0,:7]).cpu().detach().numpy() ## Add in the gripper close action
             obs, reward, done, truncated, info = env.step(action)
             reward = -np.linalg.norm(info["eof_to_obj1_diff"])
             frames.append(image)
@@ -168,23 +179,23 @@ def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./",
 
         print(f"avg reward {np.mean(rewards):.8f}")
         detail_name = "akita_black_bowl_1_to_robot0_eef_pos"
-        print({"avg "+detail_name+" for task "+str(task_id): np.mean([np.sum(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
+        print({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
         detail_name = "butter_1_to_robot0_eef_pos"
-        print({"avg "+detail_name+" for task "+str(task_id): np.mean([np.sum(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
+        print({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
         detail_name = "butter_2_to_robot0_eef_pos"
-        print({"avg "+detail_name+" for task "+str(task_id): np.mean([np.sum(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
+        print({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
         detail_name = "chocolate_pudding_1_to_robot0_eef_pos"
-        print({"avg "+detail_name+" for task "+str(task_id): np.mean([np.sum(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
+        print({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
         if not cfg.testing:
             wandb.log({"avg reward_"+str(task_id): np.mean(rewards)})
             detail_name = "akita_black_bowl_1_to_robot0_eef_pos"
-            wandb.log({"avg "+detail_name+" for task "+str(task_id): np.mean([np.sum(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
+            wandb.log({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
             detail_name = "butter_1_to_robot0_eef_pos"
-            wandb.log({"avg "+detail_name+" for task "+str(task_id): np.mean([np.sum(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
+            wandb.log({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
             detail_name = "butter_2_to_robot0_eef_pos"
-            wandb.log({"avg "+detail_name+" for task "+str(task_id): np.mean([np.sum(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
+            wandb.log({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
             detail_name = "chocolate_pudding_1_to_robot0_eef_pos"
-            wandb.log({"avg "+detail_name+" for task "+str(task_id): np.mean([np.sum(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
+            wandb.log({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
         import moviepy.editor as mpy
         clip = mpy.ImageSequenceClip(list(frames), fps=20)
         clip.write_videofile(log_dir+"/sim-libero-90-"+str(task_id)+"-"+str(iter_)+".mp4", fps=20)
@@ -196,7 +207,7 @@ import hydra, json
 from omegaconf import DictConfig, OmegaConf
 from mini_grp2 import *
 
-@hydra.main(config_path="./conf", config_name="libero-64pix")
+@hydra.main(config_path="./conf", config_name="libero-simpleEnv-64pix")
 def my_main(cfg: DictConfig):
     import tensorflow_datasets as tfds  
     from mini_shuffel_buffer import CircularBuffer
@@ -215,9 +226,24 @@ def my_main(cfg: DictConfig):
         from transformers import T5Tokenizer, T5ForConditionalGeneration
         tokenizer = T5Tokenizer.from_pretrained(cfg.dataset.t5_version)
         text_model = T5ForConditionalGeneration.from_pretrained(cfg.dataset.t5_version)
+    
+    if cfg.simEval == "simple_env":
+        import simpler_env
+        task_name = "widowx_carrot_on_plate"  # @param ["google_robot_pick_coke_can", "google_robot_move_near", "google_robot_open_drawer", "google_robot_close_drawer", "widowx_spoon_on_towel", "widowx_carrot_on_plate", "widowx_stack_cube", "widowx_put_eggplant_in_basket"]
+        if 'env' in locals():
+            print("Closing existing env")
+            env.close()
+            del env
+        env = simpler_env.make(task_name)
+        env_unwrapped = env.env.env.env ## Updated gymnasium wrapper adds lots of wrappers.
+        results = eval_model_in_sim(cfg, model_.to(cfg.device), device=cfg.device, log_dir="./",
+                                env=env, env_unwrapped=env_unwrapped,
+                                buffer=cBuffer, wandb=None, iter_=0, tokenizer=tokenizer, text_model=text_model)
 
-    results = eval_libero(cBuffer, model_.to(cfg.device), device=cfg.device, cfg=cfg,
+    if cfg.simEval == "libero":
+        results = eval_libero(cBuffer, model_.to(cfg.device), device=cfg.device, cfg=cfg,
                           iter_=0, tokenizer=tokenizer, text_model=text_model, wandb=None)
+    # print("results:", results)
     # cbuffer.save(cfg.dataset.to_name)
 
 

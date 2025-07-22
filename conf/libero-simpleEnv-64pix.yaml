@@ -36,12 +36,12 @@ policy:
 n_embd: 512
 device: "cuda"
 testing: true
-simEval: "libero" # "simple_env" or "libero"
 eval_vid_iters: 2500
 gradient_accumulation_steps: 2
 
+simEval: ["simple_env", "libero"] # "simpler_env" or "libero"
 sim:
-  eval_episodes: 2
+  eval_episodes: 5
   eval_tasks: [3, 4, 5, 9, 10, 24, 25, 30, 31, 69, 70]
   episode length: 500
 
