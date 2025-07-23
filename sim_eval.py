@@ -110,7 +110,7 @@ def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./",
         #               wandb, iter_, tokenizer=None, text_model=None):
     
     from libero.libero import benchmark
-    from libero.libero.envs import OffScreenRenderEnv
+    from libero.libero.envs import OffScreenRenderEnv, DenseRewardEnv
     import os
     from libero.libero.utils import get_libero_path
     from gymnasium.wrappers import FrameStackObservation
@@ -137,7 +137,7 @@ def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./",
             "camera_heights": 128,
             "camera_widths": 128
         }
-        env = OffScreenRenderEnv(**env_args)
+        env = DenseRewardEnv(**env_args)
         env.seed(0)
         init_states = task_suite.get_task_init_states(task_id) # for benchmarking purpose, we fix the a set of initial states
         init_state_id = 0
@@ -227,7 +227,7 @@ def my_main(cfg: DictConfig):
         tokenizer = T5Tokenizer.from_pretrained(cfg.dataset.t5_version)
         text_model = T5ForConditionalGeneration.from_pretrained(cfg.dataset.t5_version)
     
-    if cfg.simEval == "simple_env":
+    if "simple_env" in cfg.simEval:
         import simpler_env
         task_name = "widowx_carrot_on_plate"  # @param ["google_robot_pick_coke_can", "google_robot_move_near", "google_robot_open_drawer", "google_robot_close_drawer", "widowx_spoon_on_towel", "widowx_carrot_on_plate", "widowx_stack_cube", "widowx_put_eggplant_in_basket"]
         if 'env' in locals():
@@ -240,7 +240,7 @@ def my_main(cfg: DictConfig):
                                 env=env, env_unwrapped=env_unwrapped,
                                 buffer=cBuffer, wandb=None, iter_=0, tokenizer=tokenizer, text_model=text_model)
 
-    if cfg.simEval == "libero":
+    if "libero" in cfg.simEval:
         results = eval_libero(cBuffer, model_.to(cfg.device), device=cfg.device, cfg=cfg,
                           iter_=0, tokenizer=tokenizer, text_model=text_model, wandb=None)
     # print("results:", results)
