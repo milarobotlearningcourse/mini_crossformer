@@ -284,6 +284,7 @@ def my_main(cfg: DictConfig):
             project=cfg.experiment.project,
             # track hyperparameters and run metadata
             config= OmegaConf.to_container(cfg)
+            name=cfg.experiment.name,
         )
         wandb.run.log_code(".")
 
