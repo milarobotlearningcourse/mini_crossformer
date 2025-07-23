@@ -329,7 +329,9 @@ def my_main(cfg: DictConfig):
             losses = estimate_loss(model, cBuffer)
             print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, memory {torch.cuda.memory_allocated(device) / 1e6:.2f} MB")
             if not cfg.testing:
-                wandb.log({"train loss": losses['train'], "val loss": losses['val']})
+                wandb.log({"train loss": losses['train'], "val loss": losses['val'],
+                           "memory": torch.cuda.memory_allocated(device) / 1e6,
+                           "buffer_size": asizeof.asizeof(cBuffer) / 1e6}, step=iter)
 
         if iter % cfg.data_shuffel_interval == 0 or iter == cfg.max_iters - 1:
             path_ = "./miniGRP.pth"
