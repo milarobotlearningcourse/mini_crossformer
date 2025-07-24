@@ -207,7 +207,7 @@ class GRP(nn.Module):
         goals_e = goals_txt ## This is actually the embedding from the T5 model
         B, T, E = goals_txt.shape
         # T = 1
-        goals_e = torch.reshape(goals_e, (B, 1, E)) ## Reshape to match the embedding size
+        # goals_e = torch.reshape(goals_e, (B, 1, E)) ## Reshape to match the embedding size
     else:
         goals_e = self.token_embedding_table(goals_txt)
         B, E = goals_txt.shape
@@ -283,7 +283,7 @@ def my_main(cfg: DictConfig):
         wandb.init(
             project=cfg.experiment.project,
             # track hyperparameters and run metadata
-            config= OmegaConf.to_container(cfg)
+            config= OmegaConf.to_container(cfg),
             name=cfg.experiment.name,
         )
         wandb.run.log_code(".")

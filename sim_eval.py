@@ -1,6 +1,18 @@
 
 
-
+def get_text_tokens(cfg, tokenizer, text_model, goal):
+    """
+    Get the text tokens for the goal.
+    """
+    if cfg.dataset.encode_with_t5:
+        goal_ = np.zeros((cfg.max_block_size, cfg.n_embd))
+        input_ids = tokenizer(goal, return_tensors="pt").input_ids
+        goal_t = text_model.encoder(input_ids).last_hidden_state.detach().cpu().numpy() ## Get the goal embedding
+        goal_[:len(goal_t[0]), :] = goal_t[0][:cfg.max_block_size] ## Overwrite just the zeros up to the size of this vector, smaller vectors will have < max_block_size
+    else:
+        goal_ = " " * cfg.max_block_size
+        goal_ = goal[:cfg.max_block_size] + goal_[len(goal):cfg.max_block_size]
+    return [goal_]
 
 def eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, buffer,
                       wandb, iter_, tokenizer=None, text_model=None):
@@ -21,15 +33,7 @@ def eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, buffer,
         print("Instruction", instruction)
         frames = []
         done, truncated, timeLimit, t = False, False, 100, 0
-        if cfg.dataset.encode_with_t5:
-            input_ids = tokenizer(instruction, return_tensors="pt").input_ids
-            txt_goal_ = np.array([text_model.encoder(input_ids).last_hidden_state.detach().numpy()[0][:cfg.max_block_size]]) ## All just to trim the tensor down to the min size in the dataset
-            txt_goal = np.zeros((cfg.max_block_size,cfg.n_embd))
-            txt_goal[:len(txt_goal_[0]), :] = txt_goal_
-            txt_goal = [txt_goal]
-        else:
-            instruction = instruction[:cfg.max_block_size] + str(" " * cfg.max_block_size)[len(instruction):cfg.max_block_size] ## padding the string length to block size.
-            txt_goal = np.array([buffer._encode_txt(instruction)[:cfg.max_block_size]])
+        txt_goal = get_text_tokens(cfg, tokenizer, text_model, instruction)
         while not (done or truncated or (t > timeLimit)):
             # action[:3]: delta xyz; action[3:6]: delta rotation in axis-angle representation;
             # action[6:7]: gripper (the meaning of open / close depends on robot URDF)
@@ -126,10 +130,10 @@ def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./",
     for task_id in tasks:
         task = task_suite.get_task(task_id)
         task_name = task.name
-        task_description = task.language
+        instruction = task.language
         task_bddl_file = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
         print(f"[info] retrieving task {task_id} from suite {task_suite_name}, the " + \
-            f"language instruction is {task_description}, and the bddl file is {task_bddl_file}")
+            f"language instruction is {instruction}, and the bddl file is {task_bddl_file}")
 
         # step over the environment
         env_args = {
@@ -145,13 +149,8 @@ def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./",
         env = FrameStackObservation(DictWrapper(env, obs_key="agentview_image"), cfg.policy.obs_stacking) ## Stacking the observations
         obs, info = env.reset()
 
-        txt_goal = np.array([buffer._encode_txt(task_description)[:cfg.max_block_size]])
-        if cfg.dataset.encode_with_t5:
-            input_ids = tokenizer(task_description, return_tensors="pt").input_ids
-            txt_goal = [[text_model.encoder(input_ids).last_hidden_state.detach().numpy()[0, -1]]] ## All just to trim the tensor down to the min size in the dataset
+        txt_goal = get_text_tokens(cfg, tokenizer, text_model, instruction)
         image_goal = obs.reshape((128, 128, 3*cfg.policy.obs_stacking))[:,:,:3] ## Assuming the observation is an image of size 128x128 with 3 color channels
-        dummy_action = [0.] * 7
-        # image = obs["agentview_image"]
         frames = []
         rewards = []
         infos = []

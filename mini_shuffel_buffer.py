@@ -83,7 +83,7 @@ class CircularBuffer:
                             "goal_text_full": ["" for _ in range(self._size)], # This is a list of strings, not a tensor
                             "goal_img": torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.uint8, device=self._cfg.device),
                             # "rotation_delta": [], "open_gripper": [] 
-                            "t5_language_embedding": torch.tensor(np.zeros(shape=(self._size, 1, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device) if self._cfg.dataset.encode_with_t5 else None,
+                            "t5_language_embedding": torch.tensor(np.zeros(shape=(self._size, cfg.max_block_size, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device) if self._cfg.dataset.encode_with_t5 else None,
                             "terminal": torch.tensor(np.zeros(shape=(self._size, 1)), dtype=torch.uint8, device=self._cfg.device),
                             } 
                     
@@ -166,10 +166,11 @@ class CircularBuffer:
             if language_instruction is not None:
                 self._dataset_tmp["t5_language_embedding"][self._index] = torch.tensor(language_instruction, dtype=torch.float, device=self._cfg.device)
             else:
+                goal_ = np.zeros((self._cfg.max_block_size, self._cfg.n_embd))
                 input_ids = self._tokenizer(goal, return_tensors="pt").input_ids
-                goal_t = self._model.encoder(input_ids).last_hidden_state.detach().cpu().numpy()[0, -1] ## Get the goal embedding
-                # goal__[:len(goal_t[0]), :] = goal_t[0][:self._cfg.max_block_size] ## Overwrite just the zeros up to the size of this vector, smaller vectors will have < max_block_size
-                self._dataset_tmp["t5_language_embedding"][self._index] = torch.tensor(goal_t, dtype=torch.float, device=self._cfg.device)
+                goal_t = self._model.encoder(input_ids).last_hidden_state.detach().cpu().numpy() ## Get the goal embedding
+                goal_[:len(goal_t[0]), :] = goal_t[0][:self._cfg.max_block_size] ## Overwrite just the zeros up to the size of this vector, smaller vectors will have < max_block_size
+                self._dataset_tmp["t5_language_embedding"][self._index] = torch.tensor(goal_, dtype=torch.float, device=self._cfg.device)
         
         goal_ = " " * self._cfg.max_block_size
         goal_ = goal[:self._cfg.max_block_size] + goal_[len(goal):self._cfg.max_block_size] 
