@@ -14,6 +14,17 @@ def get_text_tokens(cfg, tokenizer, text_model, goal):
         goal_ = goal[:cfg.max_block_size] + goal_[len(goal):cfg.max_block_size]
     return [goal_]
 
+def get_blocked_mask(cfg, targets=None, T=0):
+    ## Compute blocked masks
+    c=192 ## Number of patches/channels in the image
+    mask = torch.ones((1 + (c * cfg.policy.obs_stacking) + T + c, ), device=cfg.device) ## (1, T)
+    if targets is None:
+        pass
+    elif (torch.rand(1)[0] > 0.66):  
+        mask[1 + (c * cfg.policy.obs_stacking): 1 + (c * cfg.policy.obs_stacking) + T] = torch.zeros((1,T), device=cfg.device) ## Mask goal string
+    elif (torch.rand(1)[0] > 0.33):
+        mask[1 + (c * cfg.policy.obs_stacking) + T: 1 + (c * cfg.policy.obs_stacking) + T + c] = torch.zeros((1,c), device=cfg.device) ## Mask goal image
+
 def eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, buffer,
                       wandb, iter_, tokenizer=None, text_model=None):
     from simpler_env.utils.env.observation_utils import get_image_from_maniskill2_obs_dict
@@ -48,7 +59,8 @@ def eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, buffer,
             action, loss = model.forward(torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image))])).to(device)
                                 # ,torch.tensor(txt_goal, dtype=torch.float).to(device) ## There can be issues here if th text is shorter than any example in the dataset
                                 ,torch.tensor(txt_goal, dtype=torch.long).to(device) ## There can be issues here if th text is shorter than any example in the dataset
-                                ,torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image[:,:,:3]))])).to(device) ## Not the correct goal image... Should mask this.
+                                ,torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image[:,:,:3]))])).to(device), ## Not the correct goal image... Should mask this.
+                                mask_=True
                                 )
             
             action = buffer._decode_action(action[0,:7]).cpu().detach().numpy() ## Add in the gripper close action
@@ -149,6 +161,8 @@ def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./",
         env = FrameStackObservation(DictWrapper(env, obs_key="agentview_image"), cfg.policy.obs_stacking) ## Stacking the observations
         obs, info = env.reset()
 
+        mask = get_blocked_mask(cfg, targets=None, T=0) ## Get the blocked mask
+        
         txt_goal = get_text_tokens(cfg, tokenizer, text_model, instruction)
         image_goal = obs.reshape((128, 128, 3*cfg.policy.obs_stacking))[:,:,:3] ## Assuming the observation is an image of size 128x128 with 3 color channels
         frames = []
@@ -163,7 +177,8 @@ def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./",
             action, loss = model.forward(torch.tensor(np.array([buffer._encode_state(buffer._resize_state(obs))])).to(device)
                         ,torch.tensor(txt_goal, dtype=torch.float).to(device) ## There can be issues here if th text is shorter than any example in the dataset
                         # ,torch.tensor(txt_goal, dtype=torch.long).to(device) ## There can be issues here if th text is shorter than any example in the dataset
-                        ,torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image_goal))])).to(device) ## Not the correct goal image... Should mask this.
+                        ,torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image_goal))])).to(device), ## Not the correct goal image... Should mask this.
+                        mask_=True
                         )
 
             action = buffer._decode_action(action[0,:7]).cpu().detach().numpy() ## Add in the gripper close action

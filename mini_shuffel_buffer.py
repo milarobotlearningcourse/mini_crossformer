@@ -198,7 +198,7 @@ class CircularBuffer:
         # data = dataset['train'] if split == 'train' else dataset['test']
         data = self._dataset_tmp
         ix = np.random.randint(min(self._count, self._size)-(max(cfg.policy.action_stacking, cfg.policy.obs_stacking)-1), size=(batch_size,))
-        x = torch.tensor(self._encode_state(data["img"][ix]), dtype=torch.float, device=cfg.device)
+        x = self._encode_state(data["img"][ix])
         ## Add time axis to the images x
         x = x.unsqueeze(1).permute(0,1,4,2,3)  # Add a time dimension and shape for torchvision
         if cfg.policy.obs_stacking > 1:
@@ -208,14 +208,14 @@ class CircularBuffer:
                 obs_ = torch.concatenate((obs_, data["img"][ix+i].unsqueeze(1).permute(0, 1, 4, 2, 3)), axis=1) ## concatenate along the time dimension 
             obs_ = transform_crop_scale(obs_).permute(0, 1, 3, 4, 2) # Convert to [B, T, C, H, W] format for torchvision transforms, and back.
             x = rearrange(obs_, 'b t h w c -> b h w (c t)', c=3, t=cfg.policy.obs_stacking) ## Rearranging the image to have the stacked history in the last channel dimension)  # Flatten the time dimension for batching
-            x = torch.tensor(self._encode_state(x), dtype=torch.float, device=cfg.device)
+            x = self._encode_state(x)
         else:
-            x = torch.tensor(self._encode_state(data["img"][ix]), dtype=torch.float, device=cfg.device)
+            x = self._encode_state(data["img"][ix])
         if cfg.dataset.encode_with_t5:
             x_goal = torch.tensor(data["t5_language_embedding"][ix], dtype=torch.float, device=cfg.device)
         else:
-            x_goal = torch.tensor(data["goal"][ix], dtype=torch.long, device=cfg.device)
-        x_goal_img = torch.tensor(self._encode_state(data["goal_img"][ix]), dtype=torch.float, device=cfg.device)
+            x_goal = data["goal"][ix]
+        x_goal_img = self._encode_state(data["goal_img"][ix])
         if cfg.policy.action_stacking > 1:
             ## Stack the next cfg.policy.action_stacking actions together
             ## Can extended slicing us list of lists... 
@@ -223,7 +223,7 @@ class CircularBuffer:
             for i in range(1, cfg.policy.action_stacking): ## This is slow but works.
                 y = torch.concatenate((y, self._encode_action(data["action"][ix+i])), axis=-1) 
         else:
-            y = torch.tensor(self._encode_action(data["action"][ix]), dtype=torch.float, device=cfg.device)
+            y = self._encode_action(data["action"][ix])
 
         return x, x_goal, x_goal_img, y
     
