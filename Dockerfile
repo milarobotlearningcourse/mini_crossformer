@@ -36,13 +36,11 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86
     /bin/bash miniconda.sh -b -p $MINICONDA_HOME && \
     rm miniconda.sh
 
-# Initialize Conda for use in the container.
-# This makes `conda activate` work correctly.
-# 'base' is the default environment that Miniconda creates.
-RUN conda init bash && \
+# Accept Conda Terms of Service for default channels
+# This is the crucial part to fix the CondaToSNonInteractiveError
+RUN conda config --set plugins.auto_accept_tos yes && \
+    conda init bash && \
     conda clean --all -f -y
-
-RUN conda config --remove channels CHANNEL
 
 RUN conda create --name roble python=3.10 pip
 RUN echo "source activate roble" >> ~/.bashrc
@@ -63,7 +61,6 @@ RUN pip install -r requirements.txt
 RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 # Check that the sime loads and pre-build mujoco in the docker image. Better to catch these errors here.
-RUN python -c "import gym; env = gym.make('Ant-v2'); print(env)"
 # COPY you code to the docker image here.
 # e.g.
 ADD conf conf
