@@ -173,7 +173,7 @@ class GRP(nn.Module):
       elif isinstance(module, nn.Embedding):
           torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-  def forward(self, images, goals_txt, goal_imgs, targets=None, pose=None):
+  def forward(self, images, goals_txt, goal_imgs, targets=None, pose=None, mask_=False):
     # Dividing images into patches
     n, c, h, w = images.shape
     # [TODO]
@@ -207,7 +207,7 @@ class GRP(nn.Module):
         goals_e = goals_txt ## This is actually the embedding from the T5 model
         B, T, E = goals_txt.shape
         # T = 1
-        goals_e = torch.reshape(goals_e, (B, 1, E)) ## Reshape to match the embedding size
+        # goals_e = torch.reshape(goals_e, (B, 1, E)) ## Reshape to match the embedding size
     else:
         goals_e = self.token_embedding_table(goals_txt)
         B, E = goals_txt.shape
@@ -215,8 +215,6 @@ class GRP(nn.Module):
     
     # Running linear layer tokenization to get embeddings
     # Map the vector corresponding to each patch to the hidden size dimension
-    # out = self.lin_map(patches)
-    # out_m = self.lin_map(patches_more)
     out_obs = self.lin_map(obs_patches) ## List of tensors, one for each stacked observation
     out_g = self.lin_map(patches_g)
     
@@ -228,11 +226,14 @@ class GRP(nn.Module):
 
     ## Compute blocked masks
     mask = torch.ones((1 + (c * self._cfg.policy.obs_stacking) + T + c, ), device=self._cfg.device) ## (1, T)
+    r_ = torch.rand(1)[0]
     if targets is None:
         pass
-    elif (torch.rand(1)[0] > 0.66):  
+    elif (r_ > 0.66):  
         mask[1 + (c * self._cfg.policy.obs_stacking): 1 + (c * self._cfg.policy.obs_stacking) + T] = torch.zeros((1,T), device=self._cfg.device) ## Mask goal string
-    elif (torch.rand(1)[0] > 0.33):
+    elif (r_ > 0.33):
+        mask[1 + (c * self._cfg.policy.obs_stacking) + T: 1 + (c * self._cfg.policy.obs_stacking) + T + c] = torch.zeros((1,c), device=self._cfg.device) ## Mask goal image
+    if mask_ is True:
         mask[1 + (c * self._cfg.policy.obs_stacking) + T: 1 + (c * self._cfg.policy.obs_stacking) + T + c] = torch.zeros((1,c), device=self._cfg.device) ## Mask goal image
         
     # Transformer Blocks
@@ -283,7 +284,8 @@ def my_main(cfg: DictConfig):
         wandb.init(
             project=cfg.experiment.project,
             # track hyperparameters and run metadata
-            config= OmegaConf.to_container(cfg)
+            config= OmegaConf.to_container(cfg),
+            name=cfg.experiment.name,
         )
         wandb.run.log_code(".")
 
@@ -329,13 +331,15 @@ def my_main(cfg: DictConfig):
             losses = estimate_loss(model, cBuffer)
             print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, memory {torch.cuda.memory_allocated(device) / 1e6:.2f} MB")
             if not cfg.testing:
-                wandb.log({"train loss": losses['train'], "val loss": losses['val']})
+                wandb.log({"train loss": losses['train'], "val loss": losses['val'],
+                           "memory": torch.cuda.memory_allocated(device) / 1e6,
+                           "buffer_size": asizeof.asizeof(cBuffer) / 1e6}, step=iter)
 
         if iter % cfg.data_shuffel_interval == 0 or iter == cfg.max_iters - 1:
             path_ = "./miniGRP.pth"
             torch.save(model, path_)
             print("Model saved to " + path_)
-        if cfg.simEval and (iter % cfg.eval_vid_iters == 0): ## Do this eval infrequently because it takes a fiar bit of compute
+        if cfg.simEval and (iter % cfg.eval_vid_iters == 0) and (iter !=0): ## Do this eval infrequently because it takes a fiar bit of compute
             if "simple_env" in cfg.simEval:
                 eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, 
                               cBuffer, wandb=wandb, iter_=iter, tokenizer=tokenizer, text_model=text_model)
