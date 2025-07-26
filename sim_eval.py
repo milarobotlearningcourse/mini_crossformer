@@ -131,19 +131,11 @@ def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./",
     from libero.libero.utils import get_libero_path
     from gymnasium.wrappers import FrameStackObservation
     from einops import rearrange
-    from torchvision.transforms import v2 # Recommend v2 for new code
 
 
     benchmark_dict = benchmark.get_benchmark_dict()
     task_suite_name = "libero_90" # can also choose libero_spatial, libero_object, etc.
     task_suite = benchmark_dict[task_suite_name]()
-
-    transform_crop_scale = v2.Compose([
-            # v2.RandomResizedCrop(size=(64, 64), scale=(0.8, 1.0), ratio=(0.75, 1.33)),
-            # v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
-            v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-            v2.ToDtype(torch.float32) # Convert to float [0,1] after crop/resize
-        ])
 
     # retrieve a specific task
     tasks = cfg.sim.eval_tasks
@@ -177,7 +169,7 @@ def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./",
         rewards = []
         infos = []
         for step_ in range(250):
-            ## Reshape the image to the correct size and stack the history on the last channel dimension
+            ## Reshape the image to the correct size and stack the hostory on the last channel dimension
             image = obs[0]
             # obs = obs.reshape((128, 128, 3*cfg.policy.obs_stacking)) ## Assuming the observation is an image of size 128x128 with 3 color channels  
             obs = rearrange(obs, 't h w c -> h w (t c)', c=3, t=cfg.policy.obs_stacking) ## Rearranging the image to have the stacked history in the last channel dimension
