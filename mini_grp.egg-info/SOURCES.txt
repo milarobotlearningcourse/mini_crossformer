@@ -1,0 +1,6 @@
+README.md
+setup.py
+mini_grp.egg-info/PKG-INFO
+mini_grp.egg-info/SOURCES.txt
+mini_grp.egg-info/dependency_links.txt
+mini_grp.egg-info/top_level.txt

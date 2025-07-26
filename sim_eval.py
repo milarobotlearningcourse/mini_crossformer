@@ -192,24 +192,24 @@ def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./",
                 break
 
         print(f"avg reward {np.mean(rewards):.8f}")
-        detail_name = "akita_black_bowl_1_to_robot0_eef_pos"
-        print({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
-        detail_name = "butter_1_to_robot0_eef_pos"
-        print({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
-        detail_name = "butter_2_to_robot0_eef_pos"
-        print({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
-        detail_name = "chocolate_pudding_1_to_robot0_eef_pos"
-        print({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
+        # detail_name = "akita_black_bowl_1_to_robot0_eef_pos"
+        # print({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
+        # detail_name = "butter_1_to_robot0_eef_pos"
+        # print({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
+        # detail_name = "butter_2_to_robot0_eef_pos"
+        # print({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
+        # detail_name = "chocolate_pudding_1_to_robot0_eef_pos"
+        # print({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
         if not cfg.testing:
             wandb.log({"avg reward_"+str(task_id): np.mean(rewards)})
-            detail_name = "akita_black_bowl_1_to_robot0_eef_pos"
-            wandb.log({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
-            detail_name = "butter_1_to_robot0_eef_pos"
-            wandb.log({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
-            detail_name = "butter_2_to_robot0_eef_pos"
-            wandb.log({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
-            detail_name = "chocolate_pudding_1_to_robot0_eef_pos"
-            wandb.log({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
+            # detail_name = "akita_black_bowl_1_to_robot0_eef_pos"
+            # wandb.log({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
+            # detail_name = "butter_1_to_robot0_eef_pos"
+            # wandb.log({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
+            # detail_name = "butter_2_to_robot0_eef_pos"
+            # wandb.log({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
+            # detail_name = "chocolate_pudding_1_to_robot0_eef_pos"
+            # wandb.log({"avg "+detail_name+" for task "+str(task_id): np.mean([np.linalg.norm(info[detail_name]) for info in infos])}) if detail_name in infos[0].keys() else " "
         import moviepy.editor as mpy
         clip = mpy.ImageSequenceClip(list(frames), fps=20)
         clip.write_videofile(log_dir+"/sim-libero-90-"+str(task_id)+"-"+str(iter_)+".mp4", fps=20)
