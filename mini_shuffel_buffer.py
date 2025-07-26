@@ -192,7 +192,7 @@ class CircularBuffer:
         transform_crop_scale = v2.Compose([
             v2.RandomResizedCrop(size=(64, 64), scale=(0.8, 1.0), ratio=(0.75, 1.33)),
             v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
-            v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             v2.ToDtype(torch.float32) # Convert to float [0,1] after crop/resize
         ])
         # generate a small batch of inputs x and targets y
