@@ -192,30 +192,29 @@ class CircularBuffer:
         transform_crop_scale = v2.Compose([
             v2.RandomResizedCrop(size=(64, 64), scale=(0.8, 1.0), ratio=(0.75, 1.33)),
             v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
-            v2.ToDtype(torch.float32, scale=True) # Convert to float [0,1] after crop/resize
+            v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            v2.ToDtype(torch.float32) # Convert to float [0,1] after crop/resize
         ])
         # generate a small batch of inputs x and targets y
         # data = dataset['train'] if split == 'train' else dataset['test']
         data = self._dataset_tmp
         ix = np.random.randint(min(self._count, self._size)-(max(cfg.policy.action_stacking, cfg.policy.obs_stacking)-1), size=(batch_size,))
-        x = self._encode_state(data["img"][ix])
+        x = data["img"][ix]
         ## Add time axis to the images x
         x = x.unsqueeze(1).permute(0,1,4,2,3)  # Add a time dimension and shape for torchvision
-        if cfg.policy.obs_stacking > 1:
-            # obs_ = transform_crop_scale(torch.tensor(data["img"][ix], dtype=torch.float, device=cfg.device).permute(0, 3, 1, 2)).permute(0, 2, 3, 1) # Convert to [B, C, H, W] format for torchvision transforms, and back.
-            obs_ = torch.tensor(data["img"][ix], dtype=torch.float, device=cfg.device).unsqueeze(1).permute(0, 1, 4, 2, 3) # Convert to [B, T, C, H, W] format for torchvision transforms, and back.
-            for i in range(1, cfg.policy.obs_stacking): ## This is slow but works.
-                obs_ = torch.concatenate((obs_, data["img"][ix+i].unsqueeze(1).permute(0, 1, 4, 2, 3)), axis=1) ## concatenate along the time dimension 
-            obs_ = transform_crop_scale(obs_).permute(0, 1, 3, 4, 2) # Convert to [B, T, C, H, W] format for torchvision transforms, and back.
-            x = rearrange(obs_, 'b t h w c -> b h w (c t)', c=3, t=cfg.policy.obs_stacking) ## Rearranging the image to have the stacked history in the last channel dimension)  # Flatten the time dimension for batching
-            x = self._encode_state(x)
-        else:
-            x = self._encode_state(data["img"][ix])
+        # obs_ = transform_crop_scale(torch.tensor(data["img"][ix], dtype=torch.float, device=cfg.device).permute(0, 3, 1, 2)).permute(0, 2, 3, 1) # Convert to [B, C, H, W] format for torchvision transforms, and back.
+        obs_ = torch.tensor(data["img"][ix], dtype=torch.float, device=cfg.device).unsqueeze(1).permute(0, 1, 4, 2, 3) # Convert to [B, T, C, H, W] format for torchvision transforms, and back.
+        for i in range(1, cfg.policy.obs_stacking): ## This is slow but works.
+            obs_ = torch.concatenate((obs_, data["img"][ix+i].unsqueeze(1).permute(0, 1, 4, 2, 3)), axis=1) ## concatenate along the time dimension 
+        obs_ = transform_crop_scale(obs_).permute(0, 1, 3, 4, 2) # Convert to [B, T, C, H, W] format for torchvision transforms, and back.
+        x = rearrange(obs_, 'b t h w c -> b h w (c t)', c=3, t=cfg.policy.obs_stacking) ## Rearranging the image to have the stacked history in the last channel dimension)  # Flatten the time dimension for batching
+            # x = x
+            # x = transform_crop_scale(data["img"][ix])
         if cfg.dataset.encode_with_t5:
             x_goal = torch.tensor(data["t5_language_embedding"][ix], dtype=torch.float, device=cfg.device)
         else:
             x_goal = data["goal"][ix]
-        x_goal_img = self._encode_state(data["goal_img"][ix])
+        x_goal_img = transform_crop_scale(data["goal_img"][ix])
         if cfg.policy.action_stacking > 1:
             ## Stack the next cfg.policy.action_stacking actions together
             ## Can extended slicing us list of lists... 
