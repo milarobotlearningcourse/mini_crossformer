@@ -1,6 +1,6 @@
 
 
-def get_text_tokens(cfg, tokenizer, text_model, goal):
+def get_text_tokens(cfg, tokenizer, text_model, goal, buff):
     """
     Get the text tokens for the goal.
     """
@@ -12,6 +12,7 @@ def get_text_tokens(cfg, tokenizer, text_model, goal):
     else:
         goal_ = " " * cfg.max_block_size
         goal_ = goal[:cfg.max_block_size] + goal_[len(goal):cfg.max_block_size]
+        goal_ = buff._encode_txt(goal_)
     return [goal_]
 
 def get_blocked_mask(cfg, targets=None, T=0):
@@ -44,7 +45,7 @@ def eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, buffer,
         print("Instruction", instruction)
         frames = []
         done, truncated, timeLimit, t = False, False, 100, 0
-        txt_goal = get_text_tokens(cfg, tokenizer, text_model, instruction)
+        txt_goal = get_text_tokens(cfg, tokenizer, text_model, instruction, buffer)
         while not (done or truncated or (t > timeLimit)):
             # action[:3]: delta xyz; action[3:6]: delta rotation in axis-angle representation;
             # action[6:7]: gripper (the meaning of open / close depends on robot URDF)

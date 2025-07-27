@@ -107,14 +107,14 @@ class CircularBuffer:
             # self._max_size = info.splits.total_num_examples
 
             chars = cfg.dataset.chars_list
-            print("chars", chars)
+            # print("chars", chars)
             cfg.vocab_size = len(chars)
             # create a mapping from characters to integers
             stoi = { ch:i for i,ch in enumerate(chars) }
             itos = { i:ch for i,ch in enumerate(chars) }
             self._encode_txt = lambda s: [stoi[c] for c in s] # text encoder to tokens: 
             self._decode_txy = lambda l: ''.join([itos[i] for i in l]) # token decoder to text: 
-            print("vocab_size:", cfg.vocab_size)
+            # print("vocab_size:", cfg.vocab_size)
 
                 ## Get the actions and encode them to map to [-1, 1]
             self._encode_state = lambda af:   ((af/(255.0)*2.0)-1.0) # encoder: take a float, output an integer
@@ -134,14 +134,16 @@ class CircularBuffer:
                 # Load the dataset from a file
                 import datasets
                 # with torch.profiler.record_function("Load huggingface dataset"):
+                start__ = time.time()
                 dataset = datasets.load_dataset(self._cfg.dataset.to_name, split='train')
                 dataset_tmp = {
                     "img": dataset["img"],
-                    "action": np.array(dataset["action"]),
-                    "goal_img": np.array(dataset["goal_img"]),
+                    "action": dataset["action"],
+                    "goal_img": dataset["goal_img"],
                     "goal": dataset["goal"],
                     "t5_language_embedding": dataset["t5_language_embedding"]
                 }
+                print("Time to load huggingface data and copy: ", time.time() - start__)
                 for i in range(len(dataset_tmp["img"])):
                     if len(dataset_tmp["action"][i:i+self._cfg.policy.action_stacking]) < self._cfg.policy.action_stacking:
                         print("Skipping index", i, "because action length is less than", self._cfg.policy.action_stacking)
@@ -170,6 +172,10 @@ class CircularBuffer:
                 .sort_stats(SortKey.CUMULATIVE)
                 .print_stats()
             )
+
+    def print_mem_footprint(self):
+        from pympler import asizeof
+        print("Memory used by the dataset cBuffer:", asizeof.asizeof(self._dataset_tmp) / 1e6, "MB")
 
     def add(self, obs, action, goal, goal_img, language_instruction=None, terminal=0):
         """ Add an observation, action, goal, goal image, rotation delta, and open gripper state to the buffer."""
@@ -203,32 +209,27 @@ class CircularBuffer:
         # from torchvision import transforms
         from torchvision.transforms import v2 # Recommend v2 for new code
         from einops import rearrange
-        # transform_crop_scale = transforms.Compose([
-        #     transforms.RandomResizedCrop(size=(128, 128), scale=(0.8, 1.0), ratio=(0.75, 1.33)),
-        #     transforms.ToTensor() # Convert PIL Image to PyTorch Tensor
-        # ])
-        transform_crop_scale = v2.Compose([
-            v2.RandomResizedCrop(size=(64, 64), scale=(0.9, 1.0), ratio=(0.9, 1.1)),
-            v2.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.05),
-            # v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            v2.ToDtype(torch.float32) # Convert to float [0,1] after crop/resize
-        ])
+        if self._cfg.policy.use_image_augmentations:
+            transform_crop_scale = v2.Compose([
+                v2.RandomResizedCrop(size=(64, 64), scale=(0.9, 1.0), ratio=(0.9, 1.1)),
+                v2.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.05),
+                # v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                v2.ToDtype(torch.float32) # Convert to float [0,1] after crop/resize
+            ])
+        else:
+            transform_crop_scale = v2.Compose([
+                v2.ToDtype(torch.float32) # Convert to float [0,1] after crop/resize
+            ])
         # generate a small batch of inputs x and targets y
         # data = dataset['train'] if split == 'train' else dataset['test']
         data = self._dataset_tmp
         ix = np.random.randint(min(self._count, self._size)-(max(cfg.policy.action_stacking, cfg.policy.obs_stacking)-1), size=(batch_size,))
-        # x = data["img"][ix]
-        ## Add time axis to the images x
-        # x = x.unsqueeze(1).permute(0,1,4,2,3)  # Add a time dimension and shape for torchvision
-        # obs_ = transform_crop_scale(torch.tensor(data["img"][ix], dtype=torch.float, device=cfg.device).permute(0, 3, 1, 2)).permute(0, 2, 3, 1) # Convert to [B, C, H, W] format for torchvision transforms, and back.
         with torch.profiler.record_function("Get batch from circular buffer and process obs image"):
             obs_ = data["img"][ix].to(torch.float).unsqueeze(1).permute(0, 1, 4, 2, 3) # Convert to [B, T, C, H, W] format for torchvision transforms, and back.
             for i in range(1, cfg.policy.obs_stacking): ## This is slow but works.
                 obs_ = torch.concatenate((obs_, data["img"][ix+i].unsqueeze(1).permute(0, 1, 4, 2, 3)), axis=1) ## concatenate along the time dimension 
             obs_ = transform_crop_scale(obs_).permute(0, 1, 3, 4, 2) # Convert to [B, T, C, H, W] format for torchvision transforms, and back.
             x = self._encode_state(rearrange(obs_, 'b t h w c -> b h w (c t)', c=3, t=cfg.policy.obs_stacking)) ## Rearranging the image to have the stacked history in the last channel dimension)  # Flatten the time dimension for batching
-            # x = x
-            # x = transform_crop_scale(data["img"][ix])
         if cfg.dataset.encode_with_t5:
             x_goal = torch.tensor(data["t5_language_embedding"][ix], dtype=torch.float, device=cfg.device)
         else:
@@ -237,7 +238,6 @@ class CircularBuffer:
         x_goal_img = x_goal_img.permute(0, 2, 3, 1) # Convert to [B, H, W, C] format from torchvision.
         if cfg.policy.action_stacking > 1:
             ## Stack the next cfg.policy.action_stacking actions together
-            ## Can extended slicing us list of lists... 
             y = torch.tensor(self._encode_action(data["action"][ix]), dtype=torch.float, device=cfg.device)
             for i in range(1, cfg.policy.action_stacking): ## This is slow but works.
                 y = torch.concatenate((y, self._encode_action(data["action"][ix+i])), axis=-1) 
@@ -359,13 +359,12 @@ def get_multi_dataset_portion(builders, cbuffer, cfg):
 
 @hydra.main(config_path="./conf", config_name="libero-64pix-dataset")
 def my_main(cfg: DictConfig):
-    import tensorflow_datasets as tfds
     import numpy as np
-    from tqdm import tqdm, trange
     # ------------
     # Train and test splits
     # Loading data
     # create RLDS dataset builder
+    np.random.seed(cfg.r_seed)
     cbuffer = CircularBuffer(cfg.dataset.buffer_size, cfg)
 
     get_multi_dataset_portion(cbuffer._builders, cbuffer, cbuffer._cfg)

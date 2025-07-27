@@ -21,7 +21,7 @@ experiment:
   project: mini-grp
   
 batch_size: 128 # how many independent sequences will we process in parallel?
-max_block_size: 16 ## Will be overidden by code
+max_block_size: 8 ## Will be overidden by code
 vocab_size: 32 ## Will be overidden by code
 n_patches: 8
 patch_size: 8
@@ -30,8 +30,9 @@ eval_interval: 100
 learning_rate: 5e-5
 eval_iters: 200
 policy:
-  action_stacking: 2
-  obs_stacking: 3
+  action_stacking: 1
+  obs_stacking: 1
+  use_image_augmentations: false
 
 n_embd: 256
 device: "cuda"
@@ -82,7 +83,7 @@ dataset:
   to_name: gberseth/libero-data-64px-full
   num_episodes: 20
   chunk_size: 20
-  buffer_size: 50000
+  buffer_size: 5000
   encode_with_t5: false
   t5_version: "t5-small"
   chars_list:  [' ', ',', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',

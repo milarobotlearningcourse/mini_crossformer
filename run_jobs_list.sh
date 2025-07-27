@@ -5,8 +5,11 @@
 strings=(
     # "MontezumaRevengeNoFrameskip-v4"
     # "AsterixNoFrameskip-v4"
-    "batch_size=128"
-    "batch_size=256"
+    # "batch_size=128"
+    # "batch_size=256"
+    "policy.action_stacking=1"
+    "policy.action_stacking=2"
+    "policy.action_stacking=3"
     # "batch_size=512"
     # "PitfallNoFrameskip-v4"
     # "PhoenixNoFrameskip-v4"

@@ -303,7 +303,7 @@ def my_main(cfg: DictConfig):
     print("Memory used by the model:", torch.cuda.memory_allocated(device) / 1e6, "MB")
     ## Print the amount of memory used by the dataset cBuffer
     from pympler import asizeof
-    print("Memory used by the dataset cBuffer:", asizeof.asizeof(cBuffer) / 1e6, "MB")
+    cBuffer.print_mem_footprint()
 
     # create a PyTorch optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.learning_rate)
@@ -326,64 +326,64 @@ def my_main(cfg: DictConfig):
 
     # --- Run the Profiler ---
     # The profiler context manager will trace the execution and performance.
-    with torch.profiler.profile(
-        activities=[
-            torch.profiler.ProfilerActivity.CPU,
-            torch.profiler.ProfilerActivity.CUDA, # Only include if CUDA is available
-        ],
-        schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
-        on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/transformer'),
-        record_shapes=True,
-        profile_memory=True,
-        with_stack=True
-    ) as prof:
+    # with torch.profiler.profile(
+    #     activities=[
+    #         torch.profiler.ProfilerActivity.CPU,
+    #         torch.profiler.ProfilerActivity.CUDA, # Only include if CUDA is available
+    #     ],
+    #     schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
+    #     on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/transformer'),
+    #     record_shapes=True,
+    #     profile_memory=True,
+    #     with_stack=True
+    # ) as prof:
 
-        for iter in range(cfg.max_iters):
+    for iter in range(cfg.max_iters):
 
-            if iter % cfg.eval_interval == 0 or iter == cfg.max_iters - 1:
-                losses = estimate_loss(model, cBuffer)
-                print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, memory {torch.cuda.memory_allocated(device) / 1e6:.2f} MB")
-                if not cfg.testing:
-                    wandb.log({"train loss": losses['train'], "val loss": losses['val'],
-                            "memory": torch.cuda.memory_allocated(device) / 1e6,
-                            "buffer_size": asizeof.asizeof(cBuffer) / 1e6}, step=iter)
+        if iter % cfg.eval_interval == 0 or iter == cfg.max_iters - 1:
+            losses = estimate_loss(model, cBuffer)
+            print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, memory {torch.cuda.memory_allocated(device) / 1e6:.2f} MB")
+            if not cfg.testing:
+                wandb.log({"train loss": losses['train'], "val loss": losses['val'],
+                        "memory": torch.cuda.memory_allocated(device) / 1e6,
+                        "buffer_size": asizeof.asizeof(cBuffer) / 1e6}, step=iter)
 
-            if iter % cfg.data_shuffel_interval == 0 or iter == cfg.max_iters - 1:
-                path_ = "./miniGRP.pth"
-                torch.save(model, path_)
-                print("Model saved to " + path_)
-            if cfg.simEval and (iter % cfg.eval_vid_iters == 0) and (iter !=0): ## Do this eval infrequently because it takes a fiar bit of compute
-                if "simple_env" in cfg.simEval:
-                    eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, 
-                                cBuffer, wandb=wandb, iter_=iter, tokenizer=tokenizer, text_model=text_model)
-                if "libero" in cfg.simEval:
-                    from sim_eval import eval_libero
-                    eval_libero(cBuffer, model, device=cfg.device, cfg=cfg, iter_=iter, log_dir=log_dir, 
-                                tokenizer=tokenizer, text_model=text_model, wandb=wandb)
+        if iter % cfg.data_shuffel_interval == 0 or iter == cfg.max_iters - 1:
+            path_ = "./miniGRP.pth"
+            torch.save(model, path_)
+            print("Model saved to " + path_)
+        if cfg.simEval and (iter % cfg.eval_vid_iters == 0) and (iter !=0): ## Do this eval infrequently because it takes a fiar bit of compute
+            if "simple_env" in cfg.simEval:
+                eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, 
+                            cBuffer, wandb=wandb, iter_=iter, tokenizer=tokenizer, text_model=text_model)
+            if "libero" in cfg.simEval:
+                from sim_eval import eval_libero
+                eval_libero(cBuffer, model, device=cfg.device, cfg=cfg, iter_=iter, log_dir=log_dir, 
+                            tokenizer=tokenizer, text_model=text_model, wandb=wandb)
 
 
-            if iter % cfg.data_shuffel_interval == 0 and iter > 0:
-                ## Update the dataset
-                shared_queue.put('shuffle')
+        if iter % cfg.data_shuffel_interval == 0 and iter > 0:
+            ## Update the dataset
+            shared_queue.put('shuffle')
 
-            xb, xg, xgi, yb = cBuffer.get_batch_grp('train', cfg, cfg.batch_size)
+        xb, xg, xgi, yb = cBuffer.get_batch_grp('train', cfg, cfg.batch_size)
 
-            # evaluate the loss
-            logits, loss = model(xb, xg, xgi, yb)
-            loss.backward()
+        # evaluate the loss
+        logits, loss = model(xb, xg, xgi, yb)
+        loss.backward()
 
-            if (iter + 1) % cfg.gradient_accumulation_steps == 0:
-                optimizer.step()
-                optimizer.zero_grad(set_to_none=True)
-        prof.step()
+        if (iter + 1) % cfg.gradient_accumulation_steps == 0:
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+    # prof.step()
 
-            # --- Print Profiler Results ---
-    print("Profiler run complete. Printing summary...")
-    print("-" * 50)
-    print(prof.key_averages(group_by_input_shape=True).table(sort_by="cpu_time_total", row_limit=15))
+    #         # --- Print Profiler Results ---
+    # print("Profiler run complete. Printing summary...")
+    # print("-" * 50)
+    # print(prof.key_averages(group_by_input_shape=True).table(sort_by="cpu_time_total", row_limit=15))
 
-    print("To view the detailed trace, run the following command in your terminal:")
-    print("tensorboard --logdir=./log")
+    # print("To view the detailed trace, run the following command in your terminal:")
+    # print("tensorboard --logdir=./log")
 
     if not cfg.testing:
         wandb.finish()
