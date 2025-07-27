@@ -1,14 +1,8 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from torch.optim import Adam
-from torch.nn import CrossEntropyLoss
-from torch.utils.data import DataLoader
-
-import tensorflow_datasets as tfds
 import numpy as np
-from tqdm import tqdm, trange
-import cv2
+import torch.profiler
 
 @torch.no_grad()
 def estimate_loss(model, dataset):
@@ -91,8 +85,9 @@ class MultiHeadAttention(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, mask=None):
-        out = torch.cat([h(x, mask) for h in self.heads], dim=-1)
-        out = self.dropout(self.proj(out))
+        with torch.profiler.record_function("Self-Attention"):
+            out = torch.cat([h(x, mask) for h in self.heads], dim=-1)
+            out = self.dropout(self.proj(out))
         return out
 
 class FeedFoward(nn.Module):
@@ -277,6 +272,10 @@ def my_main(cfg: DictConfig):
     print("Using device: ", device, f"({torch.cuda.get_device_name(device)})" if torch.cuda.is_available() else "")
     cfg.device = device
 
+    # --- OPTIM flip on Flash-SDPA back-end when on CUDA
+    # if device.type == "cuda":
+    #     torch.backends.cuda.enable_flash_sdp(True)
+
     wandb = None
     if not cfg.testing:
         import wandb
@@ -325,43 +324,66 @@ def my_main(cfg: DictConfig):
     data_thread = threading.Thread(target=cBuffer.shuffle, args=(shared_queue,))
     data_thread.start()
 
-    for iter in range(cfg.max_iters):
+    # --- Run the Profiler ---
+    # The profiler context manager will trace the execution and performance.
+    with torch.profiler.profile(
+        activities=[
+            torch.profiler.ProfilerActivity.CPU,
+            torch.profiler.ProfilerActivity.CUDA, # Only include if CUDA is available
+        ],
+        schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
+        on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/transformer'),
+        record_shapes=True,
+        profile_memory=True,
+        with_stack=True
+    ) as prof:
 
-        if iter % cfg.eval_interval == 0 or iter == cfg.max_iters - 1:
-            losses = estimate_loss(model, cBuffer)
-            print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, memory {torch.cuda.memory_allocated(device) / 1e6:.2f} MB")
-            if not cfg.testing:
-                wandb.log({"train loss": losses['train'], "val loss": losses['val'],
-                           "memory": torch.cuda.memory_allocated(device) / 1e6,
-                           "buffer_size": asizeof.asizeof(cBuffer) / 1e6}, step=iter)
+        for iter in range(cfg.max_iters):
 
-        if iter % cfg.data_shuffel_interval == 0 or iter == cfg.max_iters - 1:
-            path_ = "./miniGRP.pth"
-            torch.save(model, path_)
-            print("Model saved to " + path_)
-        if cfg.simEval and (iter % cfg.eval_vid_iters == 0) and (iter !=0): ## Do this eval infrequently because it takes a fiar bit of compute
-            if "simple_env" in cfg.simEval:
-                eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, 
-                              cBuffer, wandb=wandb, iter_=iter, tokenizer=tokenizer, text_model=text_model)
-            if "libero" in cfg.simEval:
-                from sim_eval import eval_libero
-                eval_libero(cBuffer, model, device=cfg.device, cfg=cfg, iter_=iter, log_dir=log_dir, 
-                            tokenizer=tokenizer, text_model=text_model, wandb=wandb)
+            if iter % cfg.eval_interval == 0 or iter == cfg.max_iters - 1:
+                losses = estimate_loss(model, cBuffer)
+                print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, memory {torch.cuda.memory_allocated(device) / 1e6:.2f} MB")
+                if not cfg.testing:
+                    wandb.log({"train loss": losses['train'], "val loss": losses['val'],
+                            "memory": torch.cuda.memory_allocated(device) / 1e6,
+                            "buffer_size": asizeof.asizeof(cBuffer) / 1e6}, step=iter)
+
+            if iter % cfg.data_shuffel_interval == 0 or iter == cfg.max_iters - 1:
+                path_ = "./miniGRP.pth"
+                torch.save(model, path_)
+                print("Model saved to " + path_)
+            if cfg.simEval and (iter % cfg.eval_vid_iters == 0) and (iter !=0): ## Do this eval infrequently because it takes a fiar bit of compute
+                if "simple_env" in cfg.simEval:
+                    eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, 
+                                cBuffer, wandb=wandb, iter_=iter, tokenizer=tokenizer, text_model=text_model)
+                if "libero" in cfg.simEval:
+                    from sim_eval import eval_libero
+                    eval_libero(cBuffer, model, device=cfg.device, cfg=cfg, iter_=iter, log_dir=log_dir, 
+                                tokenizer=tokenizer, text_model=text_model, wandb=wandb)
 
 
-        if iter % cfg.data_shuffel_interval == 0 and iter > 0:
-            ## Update the dataset
-            shared_queue.put('shuffle')
+            if iter % cfg.data_shuffel_interval == 0 and iter > 0:
+                ## Update the dataset
+                shared_queue.put('shuffle')
 
-        xb, xg, xgi, yb = cBuffer.get_batch_grp('train', cfg, cfg.batch_size)
+            xb, xg, xgi, yb = cBuffer.get_batch_grp('train', cfg, cfg.batch_size)
 
-        # evaluate the loss
-        logits, loss = model(xb, xg, xgi, yb)
-        loss.backward()
+            # evaluate the loss
+            logits, loss = model(xb, xg, xgi, yb)
+            loss.backward()
 
-        if (iter + 1) % cfg.gradient_accumulation_steps == 0:
-            optimizer.step()
-            optimizer.zero_grad(set_to_none=True)
+            if (iter + 1) % cfg.gradient_accumulation_steps == 0:
+                optimizer.step()
+                optimizer.zero_grad(set_to_none=True)
+        prof.step()
+
+            # --- Print Profiler Results ---
+    print("Profiler run complete. Printing summary...")
+    print("-" * 50)
+    print(prof.key_averages(group_by_input_shape=True).table(sort_by="cpu_time_total", row_limit=15))
+
+    print("To view the detailed trace, run the following command in your terminal:")
+    print("tensorboard --logdir=./log")
 
     if not cfg.testing:
         wandb.finish()

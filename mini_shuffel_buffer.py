@@ -9,6 +9,8 @@ gc.enable()
 import numpy as np
 import torch
 import cv2
+import time
+import torch.profiler
 
 # from openvla.prismatic.vla.datasets.rlds.oxe import transforms as transforms
 
@@ -70,89 +72,104 @@ class CircularBuffer:
     The buffer is initialized with a size and a configuration object.
     """
     def __init__(self, size, cfg):
+        from cProfile import Profile
+        from pstats import SortKey, Stats
         import tensorflow_datasets as tfds
-        self._size = size
-        self._cfg = cfg
-        self._index = 0
-        self._count = 0
-        self._dataset_tmp = {
-                            "img": torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.uint8, device=self._cfg.device), 
-                            "pose": torch.tensor(np.zeros(shape=(self._size, len(self._cfg.env.action_std)),), dtype=torch.float, device=self._cfg.device),
-                            "action": torch.tensor(np.zeros(shape=(self._size, len(self._cfg.env.action_std)),), dtype=torch.float, device=self._cfg.device),
-                            "goal": torch.tensor(np.zeros(shape=(self._size, self._cfg.max_block_size)), dtype=torch.float, device=self._cfg.device), 
-                            "goal_text_full": ["" for _ in range(self._size)], # This is a list of strings, not a tensor
-                            "goal_img": torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.uint8, device=self._cfg.device),
-                            # "rotation_delta": [], "open_gripper": [] 
-                            "t5_language_embedding": torch.tensor(np.zeros(shape=(self._size, cfg.max_block_size, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device) if self._cfg.dataset.encode_with_t5 else None,
-                            "terminal": torch.tensor(np.zeros(shape=(self._size, 1)), dtype=torch.uint8, device=self._cfg.device),
-                            } 
-                    
-        if self._cfg.dataset.encode_with_t5:
-            self._tokenizer = T5Tokenizer.from_pretrained(self._cfg.dataset.t5_version)
-            self._model = T5ForConditionalGeneration.from_pretrained(self._cfg.dataset.t5_version)
-            # self._dataset_tmp["t5_language_embedding"] = torch.tensor(np.zeros(shape=(self._size, self._cfg.max_block_size, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device)[0],  
 
-        self._builders = {}
-        for dataset_name in self._cfg.dataset.dataset_indicies:
-            self._builders[dataset_name] = tfds.builder_from_directory(builder_dir=dataset_name)
-        ## Get the size of the dataset from the builder
-        # info = self._builder
-        # print(f"Total number of examples (from loaded info): {info.splits.total_num_examples}")
-        # self._max_size = info.splits.total_num_examples
+        with Profile() as profile:
+            self._size = size
+            self._cfg = cfg
+            self._index = 0
+            self._count = 0
+            self._dataset_tmp = {
+                                "img": torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.uint8, device=self._cfg.device), 
+                                "pose": torch.tensor(np.zeros(shape=(self._size, len(self._cfg.env.action_std)),), dtype=torch.float, device=self._cfg.device),
+                                "action": torch.tensor(np.zeros(shape=(self._size, len(self._cfg.env.action_std)),), dtype=torch.float, device=self._cfg.device),
+                                "goal": torch.tensor(np.zeros(shape=(self._size, self._cfg.max_block_size)), dtype=torch.long, device=self._cfg.device), 
+                                "goal_text_full": ["" for _ in range(self._size)], # This is a list of strings, not a tensor
+                                "goal_img": torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.uint8, device=self._cfg.device),
+                                # "rotation_delta": [], "open_gripper": [] 
+                                "t5_language_embedding": torch.tensor(np.zeros(shape=(self._size, cfg.max_block_size, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device) if self._cfg.dataset.encode_with_t5 else None,
+                                "terminal": torch.tensor(np.zeros(shape=(self._size, 1)), dtype=torch.uint8, device=self._cfg.device),
+                                } 
+                        
+            if self._cfg.dataset.encode_with_t5:
+                self._tokenizer = T5Tokenizer.from_pretrained(self._cfg.dataset.t5_version)
+                self._model = T5ForConditionalGeneration.from_pretrained(self._cfg.dataset.t5_version)
+                # self._dataset_tmp["t5_language_embedding"] = torch.tensor(np.zeros(shape=(self._size, self._cfg.max_block_size, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device)[0],  
 
-        chars = cfg.dataset.chars_list
-        print("chars", chars)
-        cfg.vocab_size = len(chars)
-        # create a mapping from characters to integers
-        stoi = { ch:i for i,ch in enumerate(chars) }
-        itos = { i:ch for i,ch in enumerate(chars) }
-        self._encode_txt = lambda s: [stoi[c] for c in s] # text encoder to tokens: 
-        self._decode_txy = lambda l: ''.join([itos[i] for i in l]) # token decoder to text: 
-        print("vocab_size:", cfg.vocab_size)
+            self._builders = {}
+            for dataset_name in self._cfg.dataset.dataset_indicies:
+                self._builders[dataset_name] = tfds.builder_from_directory(builder_dir=dataset_name)
+            ## Get the size of the dataset from the builder
+            # info = self._builder
+            # print(f"Total number of examples (from loaded info): {info.splits.total_num_examples}")
+            # self._max_size = info.splits.total_num_examples
 
-            ## Get the actions and encode them to map to [-1, 1]
-        self._encode_state = lambda af:   ((af/(255.0)*2.0)-1.0) # encoder: take a float, output an integer
-        self._resize_state = lambda sf:   cv2.resize(np.array(sf, dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))  # resize state
-        # print("example text encode:", encode_txt(dataset_tmp["goal"][0]))
+            chars = cfg.dataset.chars_list
+            print("chars", chars)
+            cfg.vocab_size = len(chars)
+            # create a mapping from characters to integers
+            stoi = { ch:i for i,ch in enumerate(chars) }
+            itos = { i:ch for i,ch in enumerate(chars) }
+            self._encode_txt = lambda s: [stoi[c] for c in s] # text encoder to tokens: 
+            self._decode_txy = lambda l: ''.join([itos[i] for i in l]) # token decoder to text: 
+            print("vocab_size:", cfg.vocab_size)
 
-        cfg.action_bins = len(cfg.env.action_mean)
-        ## Make a fixed torch vector to scale the actions from the dataset
-        action_mean = torch.tensor(cfg.env.action_mean, dtype=torch.float, device=cfg.device)
-        action_std = torch.tensor(cfg.env.action_std, dtype=torch.float, device=cfg.device)
-        self._encode_action = lambda af:   (af - action_mean)/(action_std) # encoder: take a float, output an integer
-        self._decode_action = lambda binN: (binN * action_std) + action_mean  # Undo mapping to [-1, 1]
+                ## Get the actions and encode them to map to [-1, 1]
+            self._encode_state = lambda af:   ((af/(255.0)*2.0)-1.0) # encoder: take a float, output an integer
+            self._resize_state = lambda sf:   cv2.resize(np.array(sf, dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))  # resize state
+            # print("example text encode:", encode_txt(dataset_tmp["goal"][0]))
 
-        self._dataset_indecies = self._cfg.dataset.dataset_indicies
-        if self._cfg.dataset.load_dataset is True:
-            # Load the dataset from a file
-            import datasets
-            dataset = datasets.load_dataset(self._cfg.dataset.to_name, split='train')
-            dataset_tmp = {
-                "img": np.array(dataset["img"]),
-                "action": np.array(dataset["action"]),
-                "goal_img": np.array(dataset["goal_img"]),
-                "goal": dataset["goal"],
-                "t5_language_embedding": dataset["t5_language_embedding"]
-            }
-            for i in range(len(dataset_tmp["img"])):
-                if len(dataset_tmp["action"][i:i+self._cfg.policy.action_stacking]) < self._cfg.policy.action_stacking:
-                    print("Skipping index", i, "because action length is less than", self._cfg.policy.action_stacking)
-                    continue
-                self.add(
-                        dataset_tmp["img"][i], 
-                        #  np.reshape(dataset_tmp["img"][i:i+self._cfg.policy.action_stacking], newshape=(1, len(self._cfg.env.action_std) * self._cfg.policy.action_stacking) ),
-                          dataset_tmp["action"][i],
-                          dataset_tmp["goal"][i], 
-                          dataset_tmp["goal_img"][i],
-                          language_instruction=dataset_tmp["t5_language_embedding"][i] if cfg.dataset.encode_with_t5 else None,
-                        terminal=0
-                          )
-                # self.add(dataset_tmp["img"][i], , goal, goal_img, language_instruction)
-            print("Loaded dataset with size:", self._count)
-        elif self._cfg.dataset.load_dataset == "skip":
-            pass
-        else:
-            get_multi_dataset_portion(self._builders, self, self._cfg)
+            cfg.action_bins = len(cfg.env.action_mean)
+            ## Make a fixed torch vector to scale the actions from the dataset
+            action_mean = torch.tensor(cfg.env.action_mean, dtype=torch.float, device=cfg.device)
+            action_std = torch.tensor(cfg.env.action_std, dtype=torch.float, device=cfg.device)
+            self._encode_action = lambda af:   (af - action_mean)/(action_std) # encoder: take a float, output an integer
+            self._decode_action = lambda binN: (binN * action_std) + action_mean  # Undo mapping to [-1, 1]
+
+            self._dataset_indecies = self._cfg.dataset.dataset_indicies
+            start_ = time.time()
+            if self._cfg.dataset.load_dataset is True:
+                # Load the dataset from a file
+                import datasets
+                # with torch.profiler.record_function("Load huggingface dataset"):
+                dataset = datasets.load_dataset(self._cfg.dataset.to_name, split='train')
+                dataset_tmp = {
+                    "img": dataset["img"],
+                    "action": np.array(dataset["action"]),
+                    "goal_img": np.array(dataset["goal_img"]),
+                    "goal": dataset["goal"],
+                    "t5_language_embedding": dataset["t5_language_embedding"]
+                }
+                for i in range(len(dataset_tmp["img"])):
+                    if len(dataset_tmp["action"][i:i+self._cfg.policy.action_stacking]) < self._cfg.policy.action_stacking:
+                        print("Skipping index", i, "because action length is less than", self._cfg.policy.action_stacking)
+                        continue
+                    self.add(
+                            dataset_tmp["img"][i], 
+                            #  np.reshape(dataset_tmp["img"][i:i+self._cfg.policy.action_stacking], newshape=(1, len(self._cfg.env.action_std) * self._cfg.policy.action_stacking) ),
+                            dataset_tmp["action"][i],
+                            dataset_tmp["goal"][i], 
+                            dataset_tmp["goal_img"][i],
+                            language_instruction=dataset_tmp["t5_language_embedding"][i] if cfg.dataset.encode_with_t5 else None,
+                            terminal=0
+                            )
+                    # self.add(dataset_tmp["img"][i], , goal, goal_img, language_instruction)
+                print("Loaded dataset with size:", self._count)
+            elif self._cfg.dataset.load_dataset == "skip":
+                pass
+            else:
+                
+                get_multi_dataset_portion(self._builders, self, self._cfg)
+
+            print("Time to load dataset:", time.time() - start_)
+            (
+                Stats(profile)
+                .strip_dirs()
+                .sort_stats(SortKey.CUMULATIVE)
+                .print_stats()
+            )
 
     def add(self, obs, action, goal, goal_img, language_instruction=None, terminal=0):
         """ Add an observation, action, goal, goal image, rotation delta, and open gripper state to the buffer."""
@@ -166,11 +183,12 @@ class CircularBuffer:
             if language_instruction is not None:
                 self._dataset_tmp["t5_language_embedding"][self._index] = torch.tensor(language_instruction, dtype=torch.float, device=self._cfg.device)
             else:
-                goal_ = np.zeros((self._cfg.max_block_size, self._cfg.n_embd))
-                input_ids = self._tokenizer(goal, return_tensors="pt").input_ids
-                goal_t = self._model.encoder(input_ids).last_hidden_state.detach().cpu().numpy() ## Get the goal embedding
-                goal_[:len(goal_t[0]), :] = goal_t[0][:self._cfg.max_block_size] ## Overwrite just the zeros up to the size of this vector, smaller vectors will have < max_block_size
-                self._dataset_tmp["t5_language_embedding"][self._index] = torch.tensor(goal_, dtype=torch.float, device=self._cfg.device)
+                with torch.profiler.record_function("Process goal text with T5"):
+                    goal_ = np.zeros((self._cfg.max_block_size, self._cfg.n_embd))
+                    input_ids = self._tokenizer(goal, return_tensors="pt").input_ids
+                    goal_t = self._model.encoder(input_ids).last_hidden_state.detach().cpu().numpy() ## Get the goal embedding
+                    goal_[:len(goal_t[0]), :] = goal_t[0][:self._cfg.max_block_size] ## Overwrite just the zeros up to the size of this vector, smaller vectors will have < max_block_size
+                    self._dataset_tmp["t5_language_embedding"][self._index] = torch.tensor(goal_, dtype=torch.float, device=self._cfg.device)
         
         goal_ = " " * self._cfg.max_block_size
         goal_ = goal[:self._cfg.max_block_size] + goal_[len(goal):self._cfg.max_block_size] 
@@ -190,31 +208,33 @@ class CircularBuffer:
         #     transforms.ToTensor() # Convert PIL Image to PyTorch Tensor
         # ])
         transform_crop_scale = v2.Compose([
-            v2.RandomResizedCrop(size=(64, 64), scale=(0.8, 1.0), ratio=(0.75, 1.33)),
-            v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
-            v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            v2.RandomResizedCrop(size=(64, 64), scale=(0.9, 1.0), ratio=(0.9, 1.1)),
+            v2.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.05),
+            # v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             v2.ToDtype(torch.float32) # Convert to float [0,1] after crop/resize
         ])
         # generate a small batch of inputs x and targets y
         # data = dataset['train'] if split == 'train' else dataset['test']
         data = self._dataset_tmp
         ix = np.random.randint(min(self._count, self._size)-(max(cfg.policy.action_stacking, cfg.policy.obs_stacking)-1), size=(batch_size,))
-        x = data["img"][ix]
+        # x = data["img"][ix]
         ## Add time axis to the images x
-        x = x.unsqueeze(1).permute(0,1,4,2,3)  # Add a time dimension and shape for torchvision
+        # x = x.unsqueeze(1).permute(0,1,4,2,3)  # Add a time dimension and shape for torchvision
         # obs_ = transform_crop_scale(torch.tensor(data["img"][ix], dtype=torch.float, device=cfg.device).permute(0, 3, 1, 2)).permute(0, 2, 3, 1) # Convert to [B, C, H, W] format for torchvision transforms, and back.
-        obs_ = torch.tensor(data["img"][ix], dtype=torch.float, device=cfg.device).unsqueeze(1).permute(0, 1, 4, 2, 3) # Convert to [B, T, C, H, W] format for torchvision transforms, and back.
-        for i in range(1, cfg.policy.obs_stacking): ## This is slow but works.
-            obs_ = torch.concatenate((obs_, data["img"][ix+i].unsqueeze(1).permute(0, 1, 4, 2, 3)), axis=1) ## concatenate along the time dimension 
-        obs_ = transform_crop_scale(obs_).permute(0, 1, 3, 4, 2) # Convert to [B, T, C, H, W] format for torchvision transforms, and back.
-        x = rearrange(obs_, 'b t h w c -> b h w (c t)', c=3, t=cfg.policy.obs_stacking) ## Rearranging the image to have the stacked history in the last channel dimension)  # Flatten the time dimension for batching
+        with torch.profiler.record_function("Get batch from circular buffer and process obs image"):
+            obs_ = data["img"][ix].to(torch.float).unsqueeze(1).permute(0, 1, 4, 2, 3) # Convert to [B, T, C, H, W] format for torchvision transforms, and back.
+            for i in range(1, cfg.policy.obs_stacking): ## This is slow but works.
+                obs_ = torch.concatenate((obs_, data["img"][ix+i].unsqueeze(1).permute(0, 1, 4, 2, 3)), axis=1) ## concatenate along the time dimension 
+            obs_ = transform_crop_scale(obs_).permute(0, 1, 3, 4, 2) # Convert to [B, T, C, H, W] format for torchvision transforms, and back.
+            x = self._encode_state(rearrange(obs_, 'b t h w c -> b h w (c t)', c=3, t=cfg.policy.obs_stacking)) ## Rearranging the image to have the stacked history in the last channel dimension)  # Flatten the time dimension for batching
             # x = x
             # x = transform_crop_scale(data["img"][ix])
         if cfg.dataset.encode_with_t5:
             x_goal = torch.tensor(data["t5_language_embedding"][ix], dtype=torch.float, device=cfg.device)
         else:
             x_goal = data["goal"][ix]
-        x_goal_img = transform_crop_scale(data["goal_img"][ix])
+        x_goal_img = self._encode_state(transform_crop_scale(data["goal_img"][ix].permute(0,3,1,2).to(torch.float))) ## [B, C, H,  W]
+        x_goal_img = x_goal_img.permute(0, 2, 3, 1) # Convert to [B, H, W, C] format from torchvision.
         if cfg.policy.action_stacking > 1:
             ## Stack the next cfg.policy.action_stacking actions together
             ## Can extended slicing us list of lists... 

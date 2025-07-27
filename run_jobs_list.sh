@@ -6,8 +6,8 @@ strings=(
     # "MontezumaRevengeNoFrameskip-v4"
     # "AsterixNoFrameskip-v4"
     "batch_size=128"
-    # "batch_size=256"
-    "batch_size=512"
+    "batch_size=256"
+    # "batch_size=512"
     # "PitfallNoFrameskip-v4"
     # "PhoenixNoFrameskip-v4"
 )

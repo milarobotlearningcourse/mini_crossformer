@@ -20,7 +20,7 @@ experiment:
   name: mini_grp
   project: mini-grp
   
-batch_size: 512 # how many independent sequences will we process in parallel?
+batch_size: 128 # how many independent sequences will we process in parallel?
 max_block_size: 16 ## Will be overidden by code
 vocab_size: 32 ## Will be overidden by code
 n_patches: 8
@@ -33,7 +33,7 @@ policy:
   action_stacking: 2
   obs_stacking: 3
 
-n_embd: 512
+n_embd: 256
 device: "cuda"
 testing: true
 eval_vid_iters: 2500
@@ -83,7 +83,7 @@ dataset:
   num_episodes: 20
   chunk_size: 20
   buffer_size: 50000
-  encode_with_t5: true
+  encode_with_t5: false
   t5_version: "t5-small"
   chars_list:  [' ', ',', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
    '!', '?', '"', "'", '(', ')', '-', '_', ':', ';',
