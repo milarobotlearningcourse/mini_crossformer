@@ -78,9 +78,10 @@ def eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, buffer,
         wandb.log({"avg reward": np.mean(rewards)})
     import moviepy.editor as mpy
     clip = mpy.ImageSequenceClip(list(frames), fps=20)
-    # clip.write_videofile(log_dir+"/sim-env-"+str(iter_)+".mp4", fps=20)
+    path = log_dir+"/sim-env-"+str(iter_)+".mp4"
+    clip.write_videofile(path, fps=20)
     if not cfg.testing:
-        wandb.log({"example": wandb.Video(log_dir+"/sim-env-"+str(iter_)+".mp4")})
+        wandb.log({"example": wandb.Video(path)})
 
 import gymnasium as gym
 # --- History Stacking Wrapper ---
@@ -197,9 +198,10 @@ def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./",
             wandb.log({"avg reward_"+str(task_id): np.mean(rewards)})
         import moviepy.editor as mpy
         clip = mpy.ImageSequenceClip(list(frames), fps=20)
-        # clip.write_videofile(log_dir+"sim-libero-90-"+str(task_id)+"-"+str(iter_)+".mp4", fps=20)
+        path_ = log_dir+"sim-libero-90-"+str(task_id)+"-"+str(iter_)+".mp4"
+        clip.write_videofile(path_, fps=20)
         if not cfg.testing:
-            wandb.log({"example": wandb.Video(log_dir+"/sim-libero-90-"+str(task_id)+"-"+str(iter_)+".mp4")})
+            wandb.log({"example": wandb.Video(path_)})
         env.close()
 
 import hydra, json
