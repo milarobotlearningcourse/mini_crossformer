@@ -36,7 +36,7 @@ def eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, buffer,
     rewards = []
     for j in range(cfg.sim.eval_episodes): ## Better to eval over a few different goal configurations
         obs, reset_info = env.reset()
-        obs_hist = deque(maxlen=3)
+        obs_hist = deque(maxlen=cfg.policy.obs_stacking)
         obs_hist.append(obs['image']['base_camera']["rgb"])
         obs_hist.append(obs['image']['base_camera']["rgb"])
         obs_hist.append(obs['image']['base_camera']["rgb"])
