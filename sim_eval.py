@@ -219,7 +219,7 @@ def my_main(cfg: DictConfig):
     cBuffer = CircularBuffer(cfg.dataset.buffer_size, cfg)
     model = GRP(cfg)
     model_ = torch.load("/home/gberseth/playground/mini_grp/miniGRP.pth")
-    model_._cgf = cfg
+    # model_._cgf = cfg
 
     tokenizer = None
     text_model = None

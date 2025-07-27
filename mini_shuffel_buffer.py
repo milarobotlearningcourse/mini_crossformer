@@ -176,6 +176,9 @@ class CircularBuffer:
     def print_mem_footprint(self):
         from pympler import asizeof
         print("Memory used by the dataset cBuffer:", asizeof.asizeof(self._dataset_tmp) / 1e6, "MB")
+        print("Memory used by the dataset cBuffer image:", asizeof.asizeof(self._dataset_tmp["img"]) / 1e6, "MB")
+        print("Memory used by the dataset cBuffer goal image:", asizeof.asizeof(self._dataset_tmp["goal_img"]) / 1e6, "MB")
+        print("Memory used by the dataset cBuffer: t5_language_embedding", asizeof.asizeof(self._dataset_tmp["t5_language_embedding"]) / 1e6, "MB")
 
     def add(self, obs, action, goal, goal_img, language_instruction=None, terminal=0):
         """ Add an observation, action, goal, goal image, rotation delta, and open gripper state to the buffer."""
