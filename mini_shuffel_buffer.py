@@ -76,102 +76,102 @@ class CircularBuffer:
         from pstats import SortKey, Stats
         import tensorflow_datasets as tfds
 
-        with Profile() as profile:
-            self._size = size
-            self._cfg = cfg
-            self._index = 0
-            self._count = 0
-            self._dataset_tmp = {
-                                "img": torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.uint8, device=self._cfg.device), 
-                                "pose": torch.tensor(np.zeros(shape=(self._size, len(self._cfg.env.action_std)),), dtype=torch.float, device=self._cfg.device),
-                                "action": torch.tensor(np.zeros(shape=(self._size, len(self._cfg.env.action_std)),), dtype=torch.float, device=self._cfg.device),
-                                "goal": torch.tensor(np.zeros(shape=(self._size, self._cfg.max_block_size)), dtype=torch.long, device=self._cfg.device), 
-                                "goal_text_full": ["" for _ in range(self._size)], # This is a list of strings, not a tensor
-                                "goal_img": torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.uint8, device=self._cfg.device),
-                                # "rotation_delta": [], "open_gripper": [] 
-                                "t5_language_embedding": torch.tensor(np.zeros(shape=(self._size, cfg.max_block_size, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device) if self._cfg.dataset.encode_with_t5 else None,
-                                "terminal": torch.tensor(np.zeros(shape=(self._size, 1)), dtype=torch.uint8, device=self._cfg.device),
-                                } 
-                        
-            if self._cfg.dataset.encode_with_t5:
-                self._tokenizer = T5Tokenizer.from_pretrained(self._cfg.dataset.t5_version)
-                self._model = T5ForConditionalGeneration.from_pretrained(self._cfg.dataset.t5_version)
-                # self._dataset_tmp["t5_language_embedding"] = torch.tensor(np.zeros(shape=(self._size, self._cfg.max_block_size, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device)[0],  
+        # with Profile() as profile:
+        self._size = size
+        self._cfg = cfg
+        self._index = 0
+        self._count = 0
+        self._dataset_tmp = {
+                            "img": torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.uint8, device=self._cfg.device), 
+                            "pose": torch.tensor(np.zeros(shape=(self._size, len(self._cfg.env.action_std)),), dtype=torch.float, device=self._cfg.device),
+                            "action": torch.tensor(np.zeros(shape=(self._size, len(self._cfg.env.action_std)),), dtype=torch.float, device=self._cfg.device),
+                            "goal": torch.tensor(np.zeros(shape=(self._size, self._cfg.max_block_size)), dtype=torch.long, device=self._cfg.device), 
+                            "goal_text_full": ["" for _ in range(self._size)], # This is a list of strings, not a tensor
+                            "goal_img": torch.tensor(np.zeros(shape=(self._size, self._cfg.image_shape[0], self._cfg.image_shape[0], 3)), dtype=torch.uint8, device=self._cfg.device),
+                            # "rotation_delta": [], "open_gripper": [] 
+                            "t5_language_embedding": torch.tensor(np.zeros(shape=(self._size, cfg.max_block_size, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device) if self._cfg.dataset.encode_with_t5 else None,
+                            "terminal": torch.tensor(np.zeros(shape=(self._size, 1)), dtype=torch.uint8, device=self._cfg.device),
+                            } 
+                    
+        if self._cfg.dataset.encode_with_t5:
+            self._tokenizer = T5Tokenizer.from_pretrained(self._cfg.dataset.t5_version)
+            self._model = T5ForConditionalGeneration.from_pretrained(self._cfg.dataset.t5_version)
+            # self._dataset_tmp["t5_language_embedding"] = torch.tensor(np.zeros(shape=(self._size, self._cfg.max_block_size, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device)[0],  
 
-            self._builders = {}
-            for dataset_name in self._cfg.dataset.dataset_indicies:
-                self._builders[dataset_name] = tfds.builder_from_directory(builder_dir=dataset_name)
-            ## Get the size of the dataset from the builder
-            # info = self._builder
-            # print(f"Total number of examples (from loaded info): {info.splits.total_num_examples}")
-            # self._max_size = info.splits.total_num_examples
+        self._builders = {}
+        for dataset_name in self._cfg.dataset.dataset_indicies:
+            self._builders[dataset_name] = tfds.builder_from_directory(builder_dir=dataset_name)
+        ## Get the size of the dataset from the builder
+        # info = self._builder
+        # print(f"Total number of examples (from loaded info): {info.splits.total_num_examples}")
+        # self._max_size = info.splits.total_num_examples
 
-            chars = cfg.dataset.chars_list
-            # print("chars", chars)
-            cfg.vocab_size = len(chars)
-            # create a mapping from characters to integers
-            stoi = { ch:i for i,ch in enumerate(chars) }
-            itos = { i:ch for i,ch in enumerate(chars) }
-            self._encode_txt = lambda s: [stoi[c] for c in s] # text encoder to tokens: 
-            self._decode_txy = lambda l: ''.join([itos[i] for i in l]) # token decoder to text: 
-            # print("vocab_size:", cfg.vocab_size)
+        chars = cfg.dataset.chars_list
+        # print("chars", chars)
+        cfg.vocab_size = len(chars)
+        # create a mapping from characters to integers
+        stoi = { ch:i for i,ch in enumerate(chars) }
+        itos = { i:ch for i,ch in enumerate(chars) }
+        self._encode_txt = lambda s: [stoi[c] for c in s] # text encoder to tokens: 
+        self._decode_txy = lambda l: ''.join([itos[i] for i in l]) # token decoder to text: 
+        # print("vocab_size:", cfg.vocab_size)
 
-                ## Get the actions and encode them to map to [-1, 1]
-            self._encode_state = lambda af:   ((af/(255.0)*2.0)-1.0) # encoder: take a float, output an integer
-            self._resize_state = lambda sf:   cv2.resize(np.array(sf, dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))  # resize state
-            # print("example text encode:", encode_txt(dataset_tmp["goal"][0]))
+            ## Get the actions and encode them to map to [-1, 1]
+        self._encode_state = lambda af:   ((af/(255.0)*2.0)-1.0) # encoder: take a float, output an integer
+        self._resize_state = lambda sf:   cv2.resize(np.array(sf, dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))  # resize state
+        # print("example text encode:", encode_txt(dataset_tmp["goal"][0]))
 
-            cfg.action_bins = len(cfg.env.action_mean)
-            ## Make a fixed torch vector to scale the actions from the dataset
-            action_mean = torch.tensor(cfg.env.action_mean, dtype=torch.float, device=cfg.device)
-            action_std = torch.tensor(cfg.env.action_std, dtype=torch.float, device=cfg.device)
-            self._encode_action = lambda af:   (af - action_mean)/(action_std) # encoder: take a float, output an integer
-            self._decode_action = lambda binN: (binN * action_std) + action_mean  # Undo mapping to [-1, 1]
+        cfg.action_bins = len(cfg.env.action_mean)
+        ## Make a fixed torch vector to scale the actions from the dataset
+        action_mean = torch.tensor(cfg.env.action_mean, dtype=torch.float, device=cfg.device)
+        action_std = torch.tensor(cfg.env.action_std, dtype=torch.float, device=cfg.device)
+        self._encode_action = lambda af:   (af - action_mean)/(action_std) # encoder: take a float, output an integer
+        self._decode_action = lambda binN: (binN * action_std) + action_mean  # Undo mapping to [-1, 1]
 
-            self._dataset_indecies = self._cfg.dataset.dataset_indicies
-            start_ = time.time()
-            if self._cfg.dataset.load_dataset is True:
-                # Load the dataset from a file
-                import datasets
-                # with torch.profiler.record_function("Load huggingface dataset"):
-                start__ = time.time()
-                dataset = datasets.load_dataset(self._cfg.dataset.to_name, split='train')
-                dataset_tmp = {
-                    "img": dataset["img"],
-                    "action": dataset["action"],
-                    "goal_img": dataset["goal_img"],
-                    "goal": dataset["goal"],
-                    "t5_language_embedding": dataset["t5_language_embedding"]
-                }
-                print("Time to load huggingface data and copy: ", time.time() - start__)
-                for i in range(len(dataset_tmp["img"])):
-                    if len(dataset_tmp["action"][i:i+self._cfg.policy.action_stacking]) < self._cfg.policy.action_stacking:
-                        print("Skipping index", i, "because action length is less than", self._cfg.policy.action_stacking)
-                        continue
-                    self.add(
-                            dataset_tmp["img"][i], 
-                            #  np.reshape(dataset_tmp["img"][i:i+self._cfg.policy.action_stacking], newshape=(1, len(self._cfg.env.action_std) * self._cfg.policy.action_stacking) ),
-                            dataset_tmp["action"][i],
-                            dataset_tmp["goal"][i], 
-                            dataset_tmp["goal_img"][i],
-                            language_instruction=dataset_tmp["t5_language_embedding"][i] if cfg.dataset.encode_with_t5 else None,
-                            terminal=0
-                            )
-                    # self.add(dataset_tmp["img"][i], , goal, goal_img, language_instruction)
-                print("Loaded dataset with size:", self._count)
-            elif self._cfg.dataset.load_dataset == "skip":
-                pass
-            else:
-                
-                get_multi_dataset_portion(self._builders, self, self._cfg)
+        self._dataset_indecies = self._cfg.dataset.dataset_indicies
+        start_ = time.time()
+        if self._cfg.dataset.load_dataset is True:
+            # Load the dataset from a file
+            import datasets
+            # with torch.profiler.record_function("Load huggingface dataset"):
+            start__ = time.time()
+            dataset = datasets.load_dataset(self._cfg.dataset.to_name, split='train')
+            dataset_tmp = {
+                "img": dataset["img"],
+                "action": dataset["action"],
+                "goal_img": dataset["goal_img"],
+                "goal": dataset["goal"],
+                "t5_language_embedding": dataset["t5_language_embedding"]
+            }
+            print("Time to load huggingface data and copy: ", time.time() - start__)
+            for i in range(len(dataset_tmp["img"])):
+                if len(dataset_tmp["action"][i:i+self._cfg.policy.action_stacking]) < self._cfg.policy.action_stacking:
+                    print("Skipping index", i, "because action length is less than", self._cfg.policy.action_stacking)
+                    continue
+                self.add(
+                        dataset_tmp["img"][i], 
+                        #  np.reshape(dataset_tmp["img"][i:i+self._cfg.policy.action_stacking], newshape=(1, len(self._cfg.env.action_std) * self._cfg.policy.action_stacking) ),
+                        dataset_tmp["action"][i],
+                        dataset_tmp["goal"][i], 
+                        dataset_tmp["goal_img"][i],
+                        language_instruction=dataset_tmp["t5_language_embedding"][i] if cfg.dataset.encode_with_t5 else None,
+                        terminal=0
+                        )
+                # self.add(dataset_tmp["img"][i], , goal, goal_img, language_instruction)
+            print("Loaded dataset with size:", self._count)
+        elif self._cfg.dataset.load_dataset == "skip":
+            pass
+        else:
+            
+            get_multi_dataset_portion(self._builders, self, self._cfg)
 
             print("Time to load dataset:", time.time() - start_)
-            (
-                Stats(profile)
-                .strip_dirs()
-                .sort_stats(SortKey.CUMULATIVE)
-                .print_stats()
-            )
+            # (
+            #     Stats(profile)
+            #     .strip_dirs()
+            #     .sort_stats(SortKey.CUMULATIVE)
+            #     .print_stats()
+            # )
 
     def print_mem_footprint(self):
         from pympler import asizeof

@@ -10,7 +10,13 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "args": ["max_iters=5000"]
+            "args": ["max_iters=50", 
+                "device=cpu",
+                "dataset.num_episodes=2",
+                "dataset.chunk_size=2",
+                "simEval=['libero', 'simple_env']",
+                "eval_vid_iters=1"
+            ]
             
         }
     ]
