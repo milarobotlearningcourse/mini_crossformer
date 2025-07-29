@@ -180,13 +180,15 @@ class CircularBuffer:
         print("Memory used by the dataset cBuffer goal image:", asizeof.asizeof(self._dataset_tmp["goal_img"]) / 1e6, "MB")
         print("Memory used by the dataset cBuffer: t5_language_embedding", asizeof.asizeof(self._dataset_tmp["t5_language_embedding"]) / 1e6, "MB")
 
-    def add(self, obs, action, goal, goal_img, language_instruction=None, terminal=0):
+    def add(self, obs, action, goal, goal_img, language_instruction=None, pose=None, terminal=0):
         """ Add an observation, action, goal, goal image, rotation delta, and open gripper state to the buffer."""
     
         self._dataset_tmp["img"][self._index] = torch.tensor(np.array(obs), dtype=torch.uint8, device=self._cfg.device)
         self._dataset_tmp["action"][self._index] = torch.tensor(action, dtype=torch.float, device=self._cfg.device)
         self._dataset_tmp["goal_text_full"][self._index] = goal  # Store the full goal text
         ## Make goal embeddings of a fixed length and fill in the earlier chunks with the true goal data
+        if pose is not None:
+            self._dataset_tmp["pose"][self._index] = pose  # Store robot pose
         
         if self._cfg.dataset.encode_with_t5:
             if language_instruction is not None:
@@ -329,7 +331,8 @@ def get_dataset_portion(builder, cbuffer, cfg, list_, dataset_name=None):
                             action = episode[i]['action'],
                             goal= episode[i]['observation']["natural_language_instruction"].numpy().decode(),
                             goal_img=goal_img,
-                            terminal = 1 if i == len(episode) - 1 else 0
+                            terminal = 1 if i == len(episode) - 1 else 0,
+                            pose = np.concatenate((episode[i]["observation"]["eef_state"], episode[i]["observation"]["gripper_state"]), axis=-1) 
                             )
     print("A terminé le mélange.")
     return cbuffer

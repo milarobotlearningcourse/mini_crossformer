@@ -141,7 +141,13 @@ class GRP(nn.Module):
     """
     self.patch_size = (self._cfg.image_shape[0] / self._cfg.n_patches, self._cfg.image_shape[1] / self._cfg.n_patches)
     #Positional embedding
-    self.register_buffer('positional_embeddings', calc_positional_embeddings(1 + ((self._cfg.n_patches ** 2) * self._cfg.policy.obs_stacking) + self._cfg.max_block_size + self._cfg.n_patches ** 2, cfg.n_embd), persistent=False)
+    self.register_buffer('positional_embeddings', calc_positional_embeddings(1 + 
+                    ((self._cfg.n_patches ** 2) * self._cfg.policy.obs_stacking) + ## Input image
+                      self._cfg.policy.use_pose_data + ## Position tokens
+                      self._cfg.max_block_size + ## goal text encoding
+                      self._cfg.n_patches ** 2, ## goal image
+                      cfg.n_embd), 
+                      persistent=False)
 
     self.token_embedding_table = nn.Embedding(cfg.vocab_size, cfg.n_embd)
     self.class_tokens = nn.Parameter(torch.rand(1, cfg.n_embd))
@@ -214,7 +220,11 @@ class GRP(nn.Module):
     out_g = self.lin_map(patches_g)
     
     # Adding classification and goal_img embeddings to the other embeddings
-    out = torch.cat((self.class_tokens.expand(n, 1, -1), out_obs, goals_e, out_g), dim=1)
+    if self._cfg.policy.use_pose_data:
+        out_pose_tokens = self.lin_map_pose(pose)
+        out = torch.cat((self.class_tokens.expand(n, 1, -1), out_obs, out_pose_tokens, goals_e, out_g), dim=1)
+    else:
+        out = torch.cat((self.class_tokens.expand(n, 1, -1), out_obs, goals_e, out_g), dim=1)
     
     # Adding positional embedding
     out = out + self.positional_embeddings.repeat(n, 1, 1)
@@ -225,11 +235,11 @@ class GRP(nn.Module):
     if targets is None:
         pass
     elif (r_ > 0.66):  
-        mask[1 + (c * self._cfg.policy.obs_stacking): 1 + (c * self._cfg.policy.obs_stacking) + T] = torch.zeros((1,T), device=self._cfg.device) ## Mask goal string
+        mask[1 + (c * self._cfg.policy.obs_stacking) + self._cfg.policy.use_pose_data: 1 + (c * self._cfg.policy.obs_stacking) + T] = torch.zeros((1,T), device=self._cfg.device) ## Mask goal string
     elif (r_ > 0.33):
-        mask[1 + (c * self._cfg.policy.obs_stacking) + T: 1 + (c * self._cfg.policy.obs_stacking) + T + c] = torch.zeros((1,c), device=self._cfg.device) ## Mask goal image
+        mask[1 + (c * self._cfg.policy.obs_stacking) + self._cfg.policy.use_pose_data + T: 1 + (c * self._cfg.policy.obs_stacking) + T + c] = torch.zeros((1,c), device=self._cfg.device) ## Mask goal image
     if mask_ is True:
-        mask[1 + (c * self._cfg.policy.obs_stacking) + T: 1 + (c * self._cfg.policy.obs_stacking) + T + c] = torch.zeros((1,c), device=self._cfg.device) ## Mask goal image
+        mask[1 + (c * self._cfg.policy.obs_stacking) + self._cfg.policy.use_pose_data + T: 1 + (c * self._cfg.policy.obs_stacking) + T + c] = torch.zeros((1,c), device=self._cfg.device) ## Mask goal image
         
     # Transformer Blocks
     for block in self.blocks:
