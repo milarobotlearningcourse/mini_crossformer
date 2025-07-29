@@ -31,10 +31,10 @@ learning_rate: 5e-5
 eval_iters: 200
 policy:
   action_stacking: 1
-  obs_stacking: 1
+  obs_stacking: 2
   use_image_augmentations: false
 
-n_embd: 256
+n_embd: 512
 device: "cuda"
 testing: true
 eval_vid_iters: 2500
@@ -84,7 +84,7 @@ dataset:
   num_episodes: 20
   chunk_size: 20
   buffer_size: 5000
-  encode_with_t5: false
+  encode_with_t5: true
   t5_version: "t5-small"
   chars_list:  [' ', ',', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
    '!', '?', '"', "'", '(', ')', '-', '_', ':', ';',

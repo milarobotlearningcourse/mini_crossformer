@@ -36,10 +36,11 @@ def eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, buffer,
     rewards = []
     for j in range(cfg.sim.eval_episodes): ## Better to eval over a few different goal configurations
         obs, reset_info = env.reset()
+        obs_ = get_image_from_maniskill2_obs_dict(env_unwrapped, obs)[:,:,:3]
         obs_hist = deque(maxlen=cfg.policy.obs_stacking)
-        obs_hist.append(obs['image']['base_camera']["rgb"])
-        obs_hist.append(obs['image']['base_camera']["rgb"])
-        obs_hist.append(obs['image']['base_camera']["rgb"])
+        obs_hist.append(obs_)
+        obs_hist.append(obs_)
+        obs_hist.append(obs_)
         instruction = env_unwrapped.get_language_instruction()
         print("Reset info", reset_info)
         print("Instruction", instruction)
@@ -52,7 +53,7 @@ def eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, buffer,
             image = get_image_from_maniskill2_obs_dict(env_unwrapped, obs)
             image = image[:,:,:3] ## Remove last dimension of image color
             
-            obs_hist.append(obs['image']['base_camera']["rgb"]) ## Add the new observation to the history buffer
+            obs_hist.append(image) ## Add the new observation to the history buffer
             # obs = [obs_["image"] for obs_ in obs] # obs is a list of dicts
             image = np.stack(obs_hist, axis=-1)  # stack along the last dimension
             image = rearrange(image, 'h w c t -> h w (c t)')  # add batch dimension
@@ -61,7 +62,7 @@ def eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, buffer,
                                 # ,torch.tensor(txt_goal, dtype=torch.float).to(device) ## There can be issues here if th text is shorter than any example in the dataset
                                 ,torch.tensor(txt_goal).to(device) ## There can be issues here if th text is shorter than any example in the dataset
                                 ,torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image[:,:,:3]))])).to(device), ## Not the correct goal image... Should mask this.
-                                mask_=True
+                                mask_=True ## Masks goal image
                                 )
             
             action = buffer._decode_action(action[0,:7]).cpu().detach().numpy() ## Add in the gripper close action
@@ -198,7 +199,7 @@ def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./",
             wandb.log({"avg reward_"+str(task_id): np.mean(rewards)})
         import moviepy.editor as mpy
         clip = mpy.ImageSequenceClip(list(frames), fps=20)
-        path_ = log_dir+"sim-libero-90-"+str(task_id)+"-"+str(iter_)+".mp4"
+        path_ = log_dir+"/sim-libero-90-"+str(task_id)+"-"+str(iter_)+".mp4"
         clip.write_videofile(path_, fps=20)
         if not cfg.testing:
             wandb.log({"example": wandb.Video(path_)})
@@ -220,7 +221,8 @@ def my_main(cfg: DictConfig):
     cfg.dataset.load_dataset = "skip"
     cBuffer = CircularBuffer(cfg.dataset.buffer_size, cfg)
     model = GRP(cfg)
-    model_ = torch.load("/home/gberseth/playground/mini_grp/miniGRP.pth")
+    # model_ = torch.load("/home/gberseth/playground/mini_grp/miniGRP.pth")
+    model_ = torch.load("/home/mila/g/glen.berseth/playground/mini-grp/miniGRP.pth")
     # model_._cgf = cfg
 
     tokenizer = None

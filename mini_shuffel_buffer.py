@@ -190,7 +190,7 @@ class CircularBuffer:
         
         if self._cfg.dataset.encode_with_t5:
             if language_instruction is not None:
-                self._dataset_tmp["t5_language_embedding"][self._index] = torch.tensor(language_instruction, dtype=torch.float, device=self._cfg.device)
+                self._dataset_tmp["t5_language_embedding"][self._index] = torch.tensor(language_instruction[:self._cfg.max_block_size], dtype=torch.float, device=self._cfg.device)
             else:
                 with torch.profiler.record_function("Process goal text with T5"):
                     goal_ = np.zeros((self._cfg.max_block_size, self._cfg.n_embd))
