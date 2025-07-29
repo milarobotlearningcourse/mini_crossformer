@@ -11,7 +11,7 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "args": ["max_iters=5000", 
-                "device=cpu"
+                "device=cuda"
                 // "dataset.num_episodes=2",
                 // "dataset.chunk_size=2",
                 // "simEval=['libero', 'simple_env']",

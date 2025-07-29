@@ -37,6 +37,7 @@ def bridge_oxe_dataset_transform(trajectory):
 def maniskill_dataset_transform(trajectory):
     for i in range(0, len(trajectory)):
         trajectory[i]["observation"]["gripper_state"] = trajectory[i]["observation"]["state"][7:8]
+        trajectory[i]["observation"]["eef_state"] = trajectory[i]["observation"]["state"][1:7] ## TODO: Not sure if this is the information for wrist pos and rotation
         trajectory[i]["action"] = trajectory[i]["action"].numpy()
         trajectory[i]['observation']["natural_language_instruction"] = trajectory[i]["language_instruction"]
     return trajectory
@@ -141,7 +142,8 @@ class CircularBuffer:
                 "action": dataset["action"],
                 "goal_img": dataset["goal_img"],
                 "goal": dataset["goal"],
-                "t5_language_embedding": dataset["t5_language_embedding"]
+                "t5_language_embedding": dataset["t5_language_embedding"],
+                "pose": dataset["pose"]
             }
             print("Time to load huggingface data and copy: ", time.time() - start__)
             for i in range(len(dataset_tmp["img"])):
@@ -155,7 +157,8 @@ class CircularBuffer:
                         dataset_tmp["goal"][i], 
                         dataset_tmp["goal_img"][i],
                         language_instruction=dataset_tmp["t5_language_embedding"][i] if cfg.dataset.encode_with_t5 else None,
-                        terminal=0
+                        terminal=0,
+                        pose=dataset_tmp["pose"][i]
                         )
                 # self.add(dataset_tmp["img"][i], , goal, goal_img, language_instruction)
             print("Loaded dataset with size:", self._count)
@@ -188,7 +191,7 @@ class CircularBuffer:
         self._dataset_tmp["goal_text_full"][self._index] = goal  # Store the full goal text
         ## Make goal embeddings of a fixed length and fill in the earlier chunks with the true goal data
         if pose is not None:
-            self._dataset_tmp["pose"][self._index] = pose  # Store robot pose
+            self._dataset_tmp["pose"][self._index] = torch.tensor(pose, dtype=torch.float32, device=self._cfg.device)  # Store robot pose
         
         if self._cfg.dataset.encode_with_t5:
             if language_instruction is not None:
@@ -235,6 +238,7 @@ class CircularBuffer:
                 obs_ = torch.concatenate((obs_, data["img"][ix+i].unsqueeze(1).permute(0, 1, 4, 2, 3)), axis=1) ## concatenate along the time dimension 
             obs_ = transform_crop_scale(obs_).permute(0, 1, 3, 4, 2) # Convert to [B, T, C, H, W] format for torchvision transforms, and back.
             x = self._encode_state(rearrange(obs_, 'b t h w c -> b h w (c t)', c=3, t=cfg.policy.obs_stacking)) ## Rearranging the image to have the stacked history in the last channel dimension)  # Flatten the time dimension for batching
+        pose = data["pose"][ix].to(torch.float32).unsqueeze(1)# Convert to [B, T, C] 
         if cfg.dataset.encode_with_t5:
             x_goal = torch.tensor(data["t5_language_embedding"][ix], dtype=torch.float, device=cfg.device)
         else:
@@ -249,7 +253,7 @@ class CircularBuffer:
         else:
             y = self._encode_action(data["action"][ix])
 
-        return x, x_goal, x_goal_img, y
+        return x, pose, x_goal, x_goal_img, y
     
     def shuffle(self, shared_queue):
         print("num", shared_queue)
@@ -270,6 +274,7 @@ class CircularBuffer:
         from PIL import Image
 
         dataset_tmp = {"img": [], "action": [], "goal": [], "goal_img": [],
+                       "pose": []
                      }
         if self._cfg.dataset.encode_with_t5:
             dataset_tmp["t5_language_embedding"] = [] 
@@ -277,6 +282,7 @@ class CircularBuffer:
         for i in range(self._count):
             dataset_tmp["img"].append(Image.fromarray(self._dataset_tmp["img"][i].cpu().numpy().astype('uint8')))
             dataset_tmp["action"].append(self._dataset_tmp["action"][i].cpu().numpy())
+            dataset_tmp["pose"].append(self._dataset_tmp["pose"][i].cpu().numpy())
             dataset_tmp["goal"].append(self._decode_txy(self._dataset_tmp['goal'][i].cpu().numpy()))
             dataset_tmp["goal_img"].append(Image.fromarray(self._dataset_tmp["goal_img"][i].cpu().numpy().astype('uint8') ))
 

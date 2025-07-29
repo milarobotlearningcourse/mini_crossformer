@@ -11,8 +11,8 @@ def estimate_loss(model, dataset):
     for split in ['train', 'val']:
         losses = torch.zeros(model._cfg.eval_iters)
         for k in range(model._cfg.eval_iters):
-            X, x_goal, x_goal_img, Y = dataset.get_batch_grp(split, model._cfg, model._cfg.batch_size)
-            logits, loss = model(X, x_goal, x_goal_img, Y)
+            X, x_pose, x_goal, x_goal_img, Y = dataset.get_batch_grp(split, model._cfg, model._cfg.batch_size)
+            logits, loss = model(X, x_goal, x_goal_img, Y, pose=x_pose)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -230,16 +230,16 @@ class GRP(nn.Module):
     out = out + self.positional_embeddings.repeat(n, 1, 1)
 
     ## Compute blocked masks
-    mask = torch.ones((1 + (c * self._cfg.policy.obs_stacking) + T + c, ), device=self._cfg.device, dtype=torch.uint8) ## (1, T)
+    mask = torch.ones((1 + (c * self._cfg.policy.obs_stacking) + self._cfg.policy.use_pose_data + T + c, ), device=self._cfg.device, dtype=torch.uint8) ## (1, T)
     r_ = torch.rand(1)[0]
     if targets is None:
         pass
     elif (r_ > 0.66):  
-        mask[1 + (c * self._cfg.policy.obs_stacking) + self._cfg.policy.use_pose_data: 1 + (c * self._cfg.policy.obs_stacking) + T] = torch.zeros((1,T), device=self._cfg.device) ## Mask goal string
+        mask[1 + (c * self._cfg.policy.obs_stacking) + self._cfg.policy.use_pose_data: 1 + (c * self._cfg.policy.obs_stacking) + self._cfg.policy.use_pose_data + T] = torch.zeros((1,T), device=self._cfg.device) ## Mask goal string
     elif (r_ > 0.33):
-        mask[1 + (c * self._cfg.policy.obs_stacking) + self._cfg.policy.use_pose_data + T: 1 + (c * self._cfg.policy.obs_stacking) + T + c] = torch.zeros((1,c), device=self._cfg.device) ## Mask goal image
+        mask[1 + (c * self._cfg.policy.obs_stacking) + self._cfg.policy.use_pose_data + T: 1 + (c * self._cfg.policy.obs_stacking) + self._cfg.policy.use_pose_data + T + c] = torch.zeros((1,c), device=self._cfg.device) ## Mask goal image
     if mask_ is True:
-        mask[1 + (c * self._cfg.policy.obs_stacking) + self._cfg.policy.use_pose_data + T: 1 + (c * self._cfg.policy.obs_stacking) + T + c] = torch.zeros((1,c), device=self._cfg.device) ## Mask goal image
+        mask[1 + (c * self._cfg.policy.obs_stacking) + self._cfg.policy.use_pose_data + T: 1 + (c * self._cfg.policy.obs_stacking) + self._cfg.policy.use_pose_data + T + c] = torch.zeros((1,c), device=self._cfg.device) ## Mask goal image
         
     # Transformer Blocks
     for block in self.blocks:
@@ -273,7 +273,7 @@ def preprocess_data(cfg, device):
 
 
 # @hydra.main(config_path="conf", config_name="grp-mini")
-@hydra.main(config_path="./conf", config_name="libero-simpleEnv-64pix")
+@hydra.main(config_path="./conf", config_name="libero-simpleEnv-64pix-pose")
 def my_main(cfg: DictConfig):
     torch.manual_seed(cfg.r_seed)
     log_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
@@ -376,10 +376,10 @@ def my_main(cfg: DictConfig):
             ## Update the dataset
             shared_queue.put('shuffle')
 
-        xb, xg, xgi, yb = cBuffer.get_batch_grp('train', cfg, cfg.batch_size)
+        xb, xp, xg, xgi, yb = cBuffer.get_batch_grp('train', cfg, cfg.batch_size)
 
         # evaluate the loss
-        logits, loss = model(xb, xg, xgi, yb)
+        logits, loss = model(xb, xg, xgi, yb, pose=xp)
         loss.backward()
 
         if (iter + 1) % cfg.gradient_accumulation_steps == 0:
