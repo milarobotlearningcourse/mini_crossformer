@@ -220,7 +220,7 @@ class GRP(nn.Module):
     out = out + self.positional_embeddings.repeat(n, 1, 1)
 
     ## Compute blocked masks
-    mask = torch.ones((1 + (c * self._cfg.policy.obs_stacking) + T + c, ), device=self._cfg.device) ## (1, T)
+    mask = torch.ones((1 + (c * self._cfg.policy.obs_stacking) + T + c, ), device=self._cfg.device, dtype=torch.uint8) ## (1, T)
     r_ = torch.rand(1)[0]
     if targets is None:
         pass

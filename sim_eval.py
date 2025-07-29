@@ -5,7 +5,7 @@ def get_text_tokens(cfg, tokenizer, text_model, goal, buff):
     Get the text tokens for the goal.
     """
     if cfg.dataset.encode_with_t5:
-        goal_ = np.zeros((cfg.max_block_size, cfg.n_embd))
+        goal_ = np.zeros((cfg.max_block_size, cfg.n_embd), dtype=np.float32)
         input_ids = tokenizer(goal, return_tensors="pt").input_ids
         goal_t = text_model.encoder(input_ids).last_hidden_state.detach().cpu().numpy() ## Get the goal embedding
         goal_[:len(goal_t[0]), :] = goal_t[0][:cfg.max_block_size] ## Overwrite just the zeros up to the size of this vector, smaller vectors will have < max_block_size
@@ -58,10 +58,10 @@ def eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, buffer,
             image = np.stack(obs_hist, axis=-1)  # stack along the last dimension
             image = rearrange(image, 'h w c t -> h w (c t)')  # add batch dimension
             
-            action, loss = model.forward(torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image))])).to(device)
+            action, loss = model.forward(torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image))]), dtype=torch.float32).to(device)
                                 # ,torch.tensor(txt_goal, dtype=torch.float).to(device) ## There can be issues here if th text is shorter than any example in the dataset
                                 ,torch.tensor(txt_goal).to(device) ## There can be issues here if th text is shorter than any example in the dataset
-                                ,torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image[:,:,:3]))])).to(device), ## Not the correct goal image... Should mask this.
+                                ,torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image[:,:,:3]))]), dtype=torch.float32).to(device), ## Not the correct goal image... Should mask this.
                                 mask_=True ## Masks goal image
                                 )
             
@@ -205,13 +205,12 @@ def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./",
             wandb.log({"example": wandb.Video(path_)})
         env.close()
 
-import hydra, json
-from omegaconf import DictConfig, OmegaConf
+import hydra
+from omegaconf import DictConfig
 from mini_grp2 import *
 
 @hydra.main(config_path="./conf", config_name="libero-simpleEnv-64pix")
 def my_main(cfg: DictConfig):
-    import tensorflow_datasets as tfds  
     from mini_shuffel_buffer import CircularBuffer
     import torch
     # ------------

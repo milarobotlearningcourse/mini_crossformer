@@ -33,6 +33,7 @@ policy:
   action_stacking: 1
   obs_stacking: 2
   use_image_augmentations: false
+  dtype: 'float32'
 
 n_embd: 512
 device: "cuda"
