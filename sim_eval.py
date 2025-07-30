@@ -62,7 +62,8 @@ def eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, buffer,
                                 # ,torch.tensor(txt_goal, dtype=torch.float).to(device) ## There can be issues here if th text is shorter than any example in the dataset
                                 ,torch.tensor(txt_goal).to(device) ## There can be issues here if th text is shorter than any example in the dataset
                                 ,torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image[:,:,:3]))]), dtype=torch.float32).to(device), ## Not the correct goal image... Should mask this.
-                                mask_=True ## Masks goal image
+                                mask_=True, ## Masks goal image
+                                pose=torch.tensor([[obs["extra"]["tcp_pose"]]], dtype=torch.float32).to(device) 
                                 )
             
             action = buffer._decode_action(action[0,:7]).cpu().detach().numpy() ## Add in the gripper close action
@@ -121,7 +122,7 @@ class DictWrapper(gym.ObservationWrapper):
         Reset the environment and return the observation from the specified key.
         """
         obs = self.env.reset()
-        return obs[self._obs_key][::-1, :, :], {}
+        return obs[self._obs_key][::-1, :, :], obs
 
 def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./", 
                 tokenizer=None, text_model=None, wandb=None):
@@ -181,7 +182,10 @@ def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./",
                         ,torch.tensor(txt_goal).to(device) ## There can be issues here if th text is shorter than any example in the dataset
                         # ,torch.tensor(txt_goal, dtype=torch.long).to(device) ## There can be issues here if th text is shorter than any example in the dataset
                         ,torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image_goal))])).to(device), ## Not the correct goal image... Should mask this.
-                        mask_=True
+                        mask_=True,
+                        pose=torch.tensor([[np.concatenate( (info["robot0_eef_pos"], 
+                                                           info["robot0_eef_quat"][:3],
+                                                            [(info["robot0_gripper_qpos"][0] - info["robot0_gripper_qpos"][0]) < 0.005 ]), axis=-1)]], dtype=torch.float32).to(device) 
                         )
 
             action = buffer._decode_action(action[0,:7]).cpu().detach().numpy() ## Add in the gripper close action
@@ -209,7 +213,7 @@ import hydra
 from omegaconf import DictConfig
 from mini_grp2 import *
 
-@hydra.main(config_path="./conf", config_name="libero-simpleEnv-64pix")
+@hydra.main(config_path="./conf", config_name="libero-simpleEnv-64pix-pose")
 def my_main(cfg: DictConfig):
     from mini_shuffel_buffer import CircularBuffer
     import torch
@@ -231,6 +235,9 @@ def my_main(cfg: DictConfig):
         tokenizer = T5Tokenizer.from_pretrained(cfg.dataset.t5_version)
         text_model = T5ForConditionalGeneration.from_pretrained(cfg.dataset.t5_version)
     
+    if "libero" in cfg.simEval:
+        results = eval_libero(cBuffer, model_.to(cfg.device), device=cfg.device, cfg=cfg,
+                          iter_=0, tokenizer=tokenizer, text_model=text_model, wandb=None)
     if "simple_env" in cfg.simEval:
         import simpler_env
         task_name = "widowx_carrot_on_plate"  # @param ["google_robot_pick_coke_can", "google_robot_move_near", "google_robot_open_drawer", "google_robot_close_drawer", "widowx_spoon_on_towel", "widowx_carrot_on_plate", "widowx_stack_cube", "widowx_put_eggplant_in_basket"]
@@ -244,9 +251,6 @@ def my_main(cfg: DictConfig):
                                 env=env, env_unwrapped=env_unwrapped,
                                 buffer=cBuffer, wandb=None, iter_=0, tokenizer=tokenizer, text_model=text_model)
 
-    if "libero" in cfg.simEval:
-        results = eval_libero(cBuffer, model_.to(cfg.device), device=cfg.device, cfg=cfg,
-                          iter_=0, tokenizer=tokenizer, text_model=text_model, wandb=None)
     # print("results:", results)
     # cbuffer.save(cfg.dataset.to_name)
 

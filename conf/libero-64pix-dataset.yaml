@@ -79,7 +79,7 @@ image_shape: [64, 64, 3]
 data_shuffel_interval: 1000
 dataset: 
   to_name: gberseth/libero-data-64px-full
-  num_episodes: 20
+  num_episodes: 200
   chunk_size: 1
   buffer_size: 50000
   encode_with_t5: true

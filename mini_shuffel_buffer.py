@@ -379,7 +379,6 @@ def my_main(cfg: DictConfig):
     np.random.seed(cfg.r_seed)
     cbuffer = CircularBuffer(cfg.dataset.buffer_size, cfg)
 
-    get_multi_dataset_portion(cbuffer._builders, cbuffer, cbuffer._cfg)
     print("Dataset shape:", len(cbuffer._dataset_tmp["img"]))
     print("Dataset len:", cbuffer._count)
 
