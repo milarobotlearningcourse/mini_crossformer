@@ -21,5 +21,5 @@ echo "Running jobs for: $exp_name"
 for env in "${strings[@]}"; do
     echo "$env"
     # sbatch --array=1-3 --export=ALL,ENV_ID=$env,ARGSS='max_iters=50000' launchGPU.sh
-    sbatch --array=1-2 --export=ALL,ENV_ID=$env,ARGSS="max_iters=50000 experiment.name=$1 $env" launchGPU.sh
+    sbatch --array=1-2 --export=ALL,ENV_ID=$env,ARGSS="max_iters=50000 experiment.name=$exp_name $env" launchGPU.sh
 done
