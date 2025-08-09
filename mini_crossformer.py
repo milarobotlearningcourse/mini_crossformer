@@ -273,7 +273,7 @@ def preprocess_data(cfg, device):
 
 
 # @hydra.main(config_path="conf", config_name="grp-mini")
-@hydra.main(config_path="./conf", config_name="libero-simpleEnv-64pix-pose")
+@hydra.main(config_path="./conf", config_name="crossformer-64pix")
 def my_main(cfg: DictConfig):
     torch.manual_seed(cfg.r_seed)
     log_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir

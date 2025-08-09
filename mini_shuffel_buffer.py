@@ -92,6 +92,7 @@ class CircularBuffer:
                             # "rotation_delta": [], "open_gripper": [] 
                             "t5_language_embedding": torch.tensor(np.zeros(shape=(self._size, cfg.max_block_size, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device) if self._cfg.dataset.encode_with_t5 else None,
                             "terminal": torch.tensor(np.zeros(shape=(self._size, 1)), dtype=torch.uint8, device=self._cfg.device),
+                            "morphology": torch.tensor(np.zeros(shape=(self._size, 1)), dtype=torch.uint8, device=self._cfg.device),
                             } 
                     
         if self._cfg.dataset.encode_with_t5:
@@ -183,7 +184,8 @@ class CircularBuffer:
         print("Memory used by the dataset cBuffer goal image:", asizeof.asizeof(self._dataset_tmp["goal_img"]) / 1e6, "MB")
         print("Memory used by the dataset cBuffer: t5_language_embedding", asizeof.asizeof(self._dataset_tmp["t5_language_embedding"]) / 1e6, "MB")
 
-    def add(self, obs, action, goal, goal_img, language_instruction=None, pose=None, terminal=0):
+    def add(self, obs, action, goal, goal_img, language_instruction=None, pose=None, terminal=0, 
+            morphology=0):
         """ Add an observation, action, goal, goal image, rotation delta, and open gripper state to the buffer."""
     
         self._dataset_tmp["img"][self._index] = torch.tensor(np.array(obs), dtype=torch.uint8, device=self._cfg.device)
@@ -247,9 +249,9 @@ class CircularBuffer:
         x_goal_img = x_goal_img.permute(0, 2, 3, 1) # Convert to [B, H, W, C] format from torchvision.
         if cfg.policy.action_stacking > 1:
             ## Stack the next cfg.policy.action_stacking actions together
-            y = torch.tensor(self._encode_action(data["action"][ix + cfg.policy.obs_stacking - 1]), dtype=torch.float, device=cfg.device)
+            y = torch.tensor(self._encode_action(data["action"][ix + cfg.policy.obs_stacking - 1]), dtype=torch.float, device=cfg.device).unsqueeze(1)
             for i in range(1, cfg.policy.action_stacking): ## This is slow but works.
-                y = torch.concatenate((y, self._encode_action(data["action"][ix +cfg.policy.obs_stacking - 1 +i])), axis=-1) 
+                y = torch.concatenate((y, self._encode_action(data["action"][ix +cfg.policy.obs_stacking - 1 +i])), axis=1) ## stack on time timension. 
         else:
             y = self._encode_action(data["action"][ix])
 
