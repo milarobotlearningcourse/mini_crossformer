@@ -162,7 +162,7 @@ class GRP(nn.Module):
 
     # 5) Classification MLPk
     self.mlp = nn.Sequential(
-        nn.Linear(self._cfg.n_embd, self._cfg.action_bins * self._cfg.policy.action_stacking),  # Output size is action_bins * action_stacking
+        nn.Linear(self._cfg.n_embd, self._cfg.action_bins * self._cfg.policy.action_stacking),  # Output size is action_bins, use this per action step
     )
     # [/TODO]
 
@@ -334,7 +334,7 @@ def my_main(cfg: DictConfig):
     data_thread = threading.Thread(target=cBuffer.shuffle, args=(shared_queue,))
     data_thread.start()
 
-    # --- Run the Profiler ---
+    # --- Run the Profiler --- 
     # The profiler context manager will trace the execution and performance.
     # with torch.profiler.profile(
     #     activities=[
