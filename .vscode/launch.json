@@ -11,12 +11,13 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "args": ["max_iters=5000", 
-                "device=cuda"
+                "device=cpu",
                 // "dataset.num_episodes=2",
                 // "dataset.chunk_size=2",
                 // "simEval=['libero', 'simple_env']",
                 // "eval_vid_iters=1000",
                 // "testing=true"
+                "dataset.dataset_indicies={}"
 
             ]
             

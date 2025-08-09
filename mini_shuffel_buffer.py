@@ -231,7 +231,7 @@ class CircularBuffer:
         # generate a small batch of inputs x and targets y
         # data = dataset['train'] if split == 'train' else dataset['test']
         data = self._dataset_tmp
-        ix = np.random.randint(min(self._count, self._size)-(max(cfg.policy.action_stacking, cfg.policy.obs_stacking)-1), size=(batch_size,))
+        ix = np.random.randint(min(self._count, self._size)-((cfg.policy.action_stacking + cfg.policy.obs_stacking)-1), size=(batch_size,))
         with torch.profiler.record_function("Get batch from circular buffer and process obs image"):
             obs_ = data["img"][ix].to(torch.float).unsqueeze(1).permute(0, 1, 4, 2, 3) # Convert to [B, T, C, H, W] format for torchvision transforms, and back.
             for i in range(1, cfg.policy.obs_stacking): ## This is slow but works.
@@ -247,9 +247,9 @@ class CircularBuffer:
         x_goal_img = x_goal_img.permute(0, 2, 3, 1) # Convert to [B, H, W, C] format from torchvision.
         if cfg.policy.action_stacking > 1:
             ## Stack the next cfg.policy.action_stacking actions together
-            y = torch.tensor(self._encode_action(data["action"][ix]), dtype=torch.float, device=cfg.device)
+            y = torch.tensor(self._encode_action(data["action"][ix + cfg.policy.obs_stacking - 1]), dtype=torch.float, device=cfg.device)
             for i in range(1, cfg.policy.action_stacking): ## This is slow but works.
-                y = torch.concatenate((y, self._encode_action(data["action"][ix+i])), axis=-1) 
+                y = torch.concatenate((y, self._encode_action(data["action"][ix +cfg.policy.obs_stacking - 1 +i])), axis=-1) 
         else:
             y = self._encode_action(data["action"][ix])
 
