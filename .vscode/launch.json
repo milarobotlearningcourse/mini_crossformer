@@ -17,7 +17,8 @@
                 // "simEval=['libero', 'simple_env']",
                 // "eval_vid_iters=1000",
                 // "testing=true"
-                "dataset.dataset_indicies={}"
+                "dataset.dataset_indicies={}",
+                "dataset.buffer_size=500"
 
             ]
             

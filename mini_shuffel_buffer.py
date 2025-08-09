@@ -138,12 +138,12 @@ class CircularBuffer:
             start__ = time.time()
             dataset = datasets.load_dataset(self._cfg.dataset.to_name, split='train')
             dataset_tmp = {
-                "img": dataset["img"],
-                "action": dataset["action"],
-                "goal_img": dataset["goal_img"],
-                "goal": dataset["goal"],
-                "t5_language_embedding": dataset["t5_language_embedding"],
-                "pose": dataset["pose"]
+                "img": dataset["img"][:self._cfg.dataset.buffer_size], ## Some loading optimizations to improve debugging
+                "action": dataset["action"][:self._cfg.dataset.buffer_size],
+                "goal_img": dataset["goal_img"][:self._cfg.dataset.buffer_size],
+                "goal": dataset["goal"][:self._cfg.dataset.buffer_size],
+                "t5_language_embedding": dataset["t5_language_embedding"][:self._cfg.dataset.buffer_size],
+                "pose": dataset["pose"][:self._cfg.dataset.buffer_size]
             }
             print("Time to load huggingface data and copy: ", time.time() - start__)
             for i in range(len(dataset_tmp["img"])):
