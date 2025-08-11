@@ -93,6 +93,7 @@ class CircularBuffer:
                             "t5_language_embedding": torch.tensor(np.zeros(shape=(self._size, cfg.max_block_size, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device) if self._cfg.dataset.encode_with_t5 else None,
                             "terminal": torch.tensor(np.zeros(shape=(self._size, 1)), dtype=torch.uint8, device=self._cfg.device),
                             "morphology": torch.tensor(np.zeros(shape=(self._size, 1)), dtype=torch.uint8, device=self._cfg.device),
+                            "dog_pose": torch.tensor(np.zeros(shape=(self._size, 49)), dtype=torch.uint8, device=self._cfg.device),
                             } 
                     
         if self._cfg.dataset.encode_with_t5:

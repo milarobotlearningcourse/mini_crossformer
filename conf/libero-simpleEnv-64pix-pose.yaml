@@ -105,6 +105,7 @@ dataset:
     # "gs://gresearch/robotics/maniskill_dataset_converted_externally_to_rlds/0.1.0": {start: 0, weight: 1.0, dataset_key: "maniskill_dataset_converted_externally_to_rlds", scale: 1.0},
     # "/network/datasets/openxembodiment/datasets/language_table/0.0.1": {"start": 0, size: 1000000, weight: 0.5, "image_key": "rgb", "text_key": "instruction"},  
     # "/network/datasets/openxembodiment/datasets/kuka/0.1.0": {"start": 0, size: 1000000, weight: 0.5, "image_key": "image", "text_key": "natural_language_instruction", "action_key": "gripper_closedness_action", scale: 0.1},  
+    "/network/datasets/openxembodiment/datasets/utokyo_saytap_converted_externally_to_rlds/0.1.0/": {"start": 11, size: 28935, weight: 0.3, dataset_key: "saytap", scale: 1.0},
   }
   
 trim: 1000000
