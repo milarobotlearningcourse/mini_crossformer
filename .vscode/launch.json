@@ -19,6 +19,8 @@
                 // "testing=true"
                 // "dataset.dataset_indicies={}",
                 "dataset.buffer_size=1500",
+                "eval_vid_iters=100",
+                "data_shuffel_interval=100",
 
             ]
             

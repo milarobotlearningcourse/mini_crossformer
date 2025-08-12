@@ -107,9 +107,9 @@ class CircularBuffer:
                             # "rotation_delta": [], "open_gripper": [] 
                             "t5_language_embedding": torch.tensor(np.zeros(shape=(self._size, cfg.max_block_size, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device) if self._cfg.dataset.encode_with_t5 else None,
                             "terminal": torch.tensor(np.zeros(shape=(self._size, 1)), dtype=torch.uint8, device=self._cfg.device),
-                            "morphology": torch.tensor(np.zeros(shape=(self._size, 1)), dtype=torch.uint8, device=self._cfg.device),
-                            "dog_pose": torch.tensor(np.zeros(shape=(self._size, 30)), dtype=torch.uint8, device=self._cfg.device),
-                            "dog_action": torch.tensor(np.zeros(shape=(self._size, 12)), dtype=torch.uint8, device=self._cfg.device),
+                            "morphology": torch.tensor(np.zeros(shape=(self._size)), dtype=torch.uint8, device=self._cfg.device),
+                            "dog_pose": torch.tensor(np.zeros(shape=(self._size, 30)), dtype=torch.float32, device=self._cfg.device),
+                            "dog_action": torch.tensor(np.zeros(shape=(self._size, 12)), dtype=torch.float32, device=self._cfg.device),
                             } 
                     
         if self._cfg.dataset.encode_with_t5:
@@ -338,10 +338,19 @@ class CircularBuffer:
 
         ds = Dataset.from_dict(self._dataset_tmp)
 
-        a_std, a_mean = (self._dataset_tmp["action"][:self._count].std(axis=0) + 0.001) * 1.5, self._dataset_tmp["action"][:self._count].mean(axis=0)
-        print("action std:", a_std, "action mean:", a_mean)
+        morph_mask = (self._dataset_tmp["morphology"] == 0)
+        a_std, a_mean = (self._dataset_tmp["action"][morph_mask][:self._count].std(axis=0) + 0.001) * 1.5, self._dataset_tmp["action"][morph_mask][:self._count].mean(axis=0)
         self._cfg.env.action_std = a_std.cpu().numpy().tolist()
         self._cfg.env.action_mean = a_mean.cpu().numpy().tolist()
+
+        morph_mask = (self._dataset_tmp["morphology"] == 1)
+        a_std, a_mean = (self._dataset_tmp["dog_action"][morph_mask][:self._count].std(axis=0) + 0.001) * 1.5, self._dataset_tmp["dog_action"][morph_mask][:self._count].mean(axis=0)
+        self._cfg.env.action_std_a1 = a_std.cpu().numpy().tolist()
+        self._cfg.env.action_mean_a1 = a_mean.cpu().numpy().tolist()
+
+        a_std, a_mean = (self._dataset_tmp["dog_pose"][morph_mask][:self._count].std(axis=0) + 0.001) * 1.5, self._dataset_tmp["dog_pose"][morph_mask][:self._count].mean(axis=0)
+        self._cfg.env.state_std_a1 = a_std.cpu().numpy().tolist()
+        self._cfg.env.state_mean_a1 = a_mean.cpu().numpy().tolist()
         ## Save the configuration to a file
         with open('./config.json', 'w') as f:
             json.dump(OmegaConf.to_container(self._cfg, resolve=True), f, indent=2)
@@ -410,13 +419,13 @@ def get_multi_dataset_portion(builders, cbuffer, cfg):
     for dataset_name, builder in builders.items():
         print("Loading dataset:", dataset_name)
         ## Get the number of items in the dataset
-        size = builder.info.splits["train"].num_examples
-        print(" size_ ", size
-                , " count_", cbuffer._count, " index_", cbuffer._index)
-        ix = np.random.randint(size-1, size=(int(cfg.dataset.num_episodes * 
-                                                 cfg.dataset.dataset_indicies[dataset_name]["weight"] * 
-                                                 (1.0/len(cfg.dataset.dataset_indicies)))
-                                                 ))
+        samples_ = (int(cfg.dataset.num_episodes * 
+                        cfg.dataset.dataset_indicies[dataset_name]["weight"] * 
+                        (1.0/len(cfg.dataset.dataset_indicies)))
+                        )
+        print(" size_ ", builder.info.splits["train"].num_examples
+                , " samples_", samples_)
+        ix = np.random.randint(builder.info.splits["train"].num_examples-1, size=samples_)
         get_dataset_portion(builder, cbuffer, cfg, dataset_name=dataset_name, list_=ix)
 
 @hydra.main(config_path="./conf", config_name="crossformer-64pix")
