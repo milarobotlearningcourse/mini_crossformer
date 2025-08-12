@@ -11,8 +11,8 @@ def estimate_loss(model, dataset):
     for split in ['train', 'val']:
         losses = torch.zeros(model._cfg.eval_iters)
         for k in range(model._cfg.eval_iters):
-            X, x_pose, x_goal, x_goal_img, Y = dataset.get_batch_grp(split, model._cfg, model._cfg.batch_size)
-            logits, loss = model(X, x_goal, x_goal_img, Y, pose=x_pose)
+            X, x_pose, x_goal, x_goal_img, Y, morph = dataset.get_batch_grp(split, model._cfg, model._cfg.batch_size)
+            logits, loss = model(X, x_goal, x_goal_img, Y, pose=x_pose, morphology=morph)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -178,7 +178,8 @@ class GRP(nn.Module):
       elif isinstance(module, nn.Embedding):
           torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-  def forward(self, images, goals_txt, goal_imgs, targets=None, pose=None, mask_=False):
+  def forward(self, images, goals_txt, goal_imgs, targets=None, pose=None, mask_=False,
+              morphology=None):
     # Dividing images into patches
     n, c, h, w = images.shape
     # [TODO]
@@ -225,7 +226,14 @@ class GRP(nn.Module):
     
     # Adding classification and goal_img embeddings to the other embeddings
     if self._cfg.policy.use_pose_data:
-        out_pose_tokens = self.lin_map_pose(pose)
+        mask_A = (morphology == 0) # Samples for model A
+        mask_B = (morphology == 1) # Samples for B
+        out_pose_tokens = torch.zeros((n, 1, self._cfg.n_embd), device=self._cfg.device)
+        if mask_A.any():
+            out_pose_tokens[mask_A] = self.lin_map_pose(pose[mask_A][:,:,:7]) # Use the first 7 dimensions of the pose for model A
+        if mask_B.any():
+            out_pose_tokens[mask_B] = self.lin_map_pose_m1(pose[mask_B])
+        # out_pose_tokens = self.lin_map_pose(pose)
         out = torch.cat((out_obs, out_pose_tokens, goals_e, out_g, self.class_tokens.expand(n, self._cfg.policy.action_stacking, -1)), dim=1)
     else:
         out = torch.cat((out_obs, goals_e, out_g, self.class_tokens.expand(n, self._cfg.policy.action_stacking, -1)), dim=1)
@@ -251,7 +259,11 @@ class GRP(nn.Module):
 
     # Getting the classification token only as the last 2 tokens
     out_c = out[:, -self._cfg.policy.action_stacking:]
-    out = self.mlp(out_c) # (B, T, Embedding size) -> (B, action_stacking, action_bins)
+    out_ = torch.zeros((n, 1, 12), device=self._cfg.device)
+    if mask_A.any():
+        out[mask_A] = self.mlp(out_c[mask_A][:,:,:7]) # (B, T, Embedding size) -> (B, action_stacking, action_bins)
+    if mask_B.any():
+        out[mask_B] = self.mlp_m1(out_c[mask_B]) # (B, T, Embedding size) -> (B, action_stacking, action_bins)
         
     if targets is None:
         loss = None
@@ -380,10 +392,10 @@ def my_main(cfg: DictConfig):
             ## Update the dataset
             shared_queue.put('shuffle')
 
-        xb, xp, xg, xgi, yb = cBuffer.get_batch_grp('train', cfg, cfg.batch_size)
+        xb, xp, xg, xgi, yb, mb = cBuffer.get_batch_grp('train', cfg, cfg.batch_size)
 
         # evaluate the loss
-        logits, loss = model(xb, xg, xgi, yb, pose=xp)
+        logits, loss = model(xb, xg, xgi, yb, pose=xp, morphology=mb)
         loss.backward()
 
         if (iter + 1) % cfg.gradient_accumulation_steps == 0:

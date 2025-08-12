@@ -161,22 +161,32 @@ class CircularBuffer:
                 "goal_img": dataset["goal_img"][:self._cfg.dataset.buffer_size],
                 "goal": dataset["goal_text_full"][:self._cfg.dataset.buffer_size],
                 "t5_language_embedding": dataset["t5_language_embedding"][:self._cfg.dataset.buffer_size],
-                "pose": dataset["pose"][:self._cfg.dataset.buffer_size]
+                "pose": dataset["pose"][:self._cfg.dataset.buffer_size],
+                "dog_pose": dataset["dog_pose"][:self._cfg.dataset.buffer_size],
+                "dog_action": dataset["dog_action"][:self._cfg.dataset.buffer_size],
+                "morphology": dataset["morphology"][:self._cfg.dataset.buffer_size],
             }
             print("Time to load huggingface data and copy: ", time.time() - start__)
             for i in range(len(dataset_tmp["img"])):
                 if len(dataset_tmp["action"][i:i+self._cfg.policy.action_stacking]) < self._cfg.policy.action_stacking:
                     print("Skipping index", i, "because action length is less than", self._cfg.policy.action_stacking)
                     continue
+                if dataset_tmp["morphology"][i][0] == 0:
+                    pose = dataset_tmp["pose"][i]
+                    action = dataset_tmp["action"][i]
+                elif dataset_tmp["morphology"][i][0] == 1:
+                    pose = dataset_tmp["dog_pose"][i]
+                    action = dataset_tmp["dog_action"][i]
                 self.add(
                         dataset_tmp["img"][i], 
                         #  np.reshape(dataset_tmp["img"][i:i+self._cfg.policy.action_stacking], newshape=(1, len(self._cfg.env.action_std) * self._cfg.policy.action_stacking) ),
-                        dataset_tmp["action"][i],
+                        action,
                         dataset_tmp["goal"][i], 
                         dataset_tmp["goal_img"][i],
                         language_instruction=dataset_tmp["t5_language_embedding"][i] if cfg.dataset.encode_with_t5 else None,
                         terminal=0,
-                        pose=dataset_tmp["pose"][i]
+                        pose=pose,
+                        morphology=dataset_tmp["morphology"][i][0]
                         )
                 # self.add(dataset_tmp["img"][i], , goal, goal_img, language_instruction)
             print("Loaded dataset with size:", self._count)
@@ -238,7 +248,7 @@ class CircularBuffer:
         self._count += 1
         self._index = (self._index + 1) % self._size
 
-    def get_batch_grp(self, split, cfg, batch_size):
+    def get_batch_grp(self, split, cfg, batch_size, morphology=0):
         # from torchvision import transforms
         from torchvision.transforms import v2 # Recommend v2 for new code
         from einops import rearrange
@@ -257,13 +267,18 @@ class CircularBuffer:
         # data = dataset['train'] if split == 'train' else dataset['test']
         data = self._dataset_tmp
         ix = np.random.randint(min(self._count, self._size)-((cfg.policy.action_stacking + cfg.policy.obs_stacking)-1), size=(batch_size,))
+        morphology = data["morphology"][ix].to(torch.uint8).squeeze(1) # Convert to [B]
         with torch.profiler.record_function("Get batch from circular buffer and process obs image"):
             obs_ = data["img"][ix].to(torch.float).unsqueeze(1).permute(0, 1, 4, 2, 3) # Convert to [B, T, C, H, W] format for torchvision transforms, and back.
             for i in range(1, cfg.policy.obs_stacking): ## This is slow but works.
                 obs_ = torch.concatenate((obs_, data["img"][ix+i].unsqueeze(1).permute(0, 1, 4, 2, 3)), axis=1) ## concatenate along the time dimension 
             obs_ = transform_crop_scale(obs_).permute(0, 1, 3, 4, 2) # Convert to [B, T, C, H, W] format for torchvision transforms, and back.
             x = self._encode_state(rearrange(obs_, 'b t h w c -> b h w (c t)', c=3, t=cfg.policy.obs_stacking)) ## Rearranging the image to have the stacked history in the last channel dimension)  # Flatten the time dimension for batching
-        pose = data["pose"][ix].to(torch.float32).unsqueeze(1)# Convert to [B, T, C] 
+        
+        pose = data["dog_pose"][ix].to(torch.float32).unsqueeze(1)# Convert to [B, T, C]
+        morph_mask = (morphology == 0)
+        pose[morph_mask][:,:,:7] = data["pose"][ix][morph_mask].to(torch.float32).unsqueeze(1)# Convert to [B, T, C] 
+
         if cfg.dataset.encode_with_t5:
             x_goal = torch.tensor(data["t5_language_embedding"][ix], dtype=torch.float, device=cfg.device)
         else:
@@ -278,7 +293,7 @@ class CircularBuffer:
         else:
             y = self._encode_action(data["action"][ix])
 
-        return x, pose, x_goal, x_goal_img, y
+        return x, pose, x_goal, x_goal_img, y, morphology
     
     def shuffle(self, shared_queue):
         print("num", shared_queue)
@@ -298,6 +313,7 @@ class CircularBuffer:
         import datasets
         from PIL import Image
 
+        ##TODO: fix bug where the saved data can be full of empty arrays after self._count
         # dataset_tmp = {"img": [], "action": [], "goal": [], "goal_img": [],
         #                "pose": []
         #              }
