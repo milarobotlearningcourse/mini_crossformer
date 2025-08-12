@@ -63,10 +63,11 @@ def eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, buffer,
                                 ,torch.tensor(txt_goal).to(device) ## There can be issues here if th text is shorter than any example in the dataset
                                 ,torch.tensor(np.array([buffer._encode_state(buffer._resize_state(image[:,:,:3]))]), dtype=torch.float32).to(device), ## Not the correct goal image... Should mask this.
                                 mask_=True, ## Masks goal image
-                                pose=torch.tensor([[obs["extra"]["tcp_pose"]]], dtype=torch.float32).to(device) 
+                                pose=torch.tensor([[obs["extra"]["tcp_pose"]]], dtype=torch.float32).to(device),
+                                morphology=torch.tensor([0], dtype=torch.uint8).to(device) ## Morphology is 0 for dog, 1 for A1}
                                 )
             
-            action = buffer._decode_action(action[0,:7]).cpu().detach().numpy() ## Add in the gripper close action
+            action = buffer._decode_action(action[0,0,:7]).cpu().detach().numpy() ## Add in the gripper close action
             obs, reward, done, truncated, info = env.step(action)
             reward = -np.linalg.norm(info["eof_to_obj1_diff"])
             frames.append(image)
@@ -185,10 +186,11 @@ def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./",
                         mask_=True,
                         pose=torch.tensor([[np.concatenate( (info["robot0_eef_pos"], 
                                                            info["robot0_eef_quat"][:3],
-                                                            [(info["robot0_gripper_qpos"][0] - info["robot0_gripper_qpos"][0]) < 0.005 ]), axis=-1)]], dtype=torch.float32).to(device) 
+                                                            [(info["robot0_gripper_qpos"][0] - info["robot0_gripper_qpos"][0]) < 0.005 ]), axis=-1)]], dtype=torch.float32).to(device),
+                        morphology=torch.tensor([0], dtype=torch.uint8).to(device) ## Morphology is 0 for arm, 1 for A1}
                         )
 
-            action = buffer._decode_action(action[0,:7]).cpu().detach().numpy() ## Add in the gripper close action
+            action = buffer._decode_action(action[0,0,:7]).cpu().detach().numpy() ## Add in the gripper close action
             frames.append(image)
             x = env.step(action)
             obs, reward, done, truncated, info = x
@@ -211,7 +213,7 @@ def eval_libero(buffer, model, device, cfg, iter_=0, log_dir="./",
 
 import hydra
 from omegaconf import DictConfig
-from mini_grp2 import *
+from mini_crossformer import *
 
 @hydra.main(config_path="./conf", config_name="libero-simpleEnv-64pix-pose")
 def my_main(cfg: DictConfig):
