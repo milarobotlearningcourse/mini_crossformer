@@ -159,7 +159,7 @@ class CircularBuffer:
                 "img": dataset["img"][:self._cfg.dataset.buffer_size], ## Some loading optimizations to improve debugging
                 "action": dataset["action"][:self._cfg.dataset.buffer_size],
                 "goal_img": dataset["goal_img"][:self._cfg.dataset.buffer_size],
-                "goal": dataset["goal"][:self._cfg.dataset.buffer_size],
+                "goal": dataset["goal_text_full"][:self._cfg.dataset.buffer_size],
                 "t5_language_embedding": dataset["t5_language_embedding"][:self._cfg.dataset.buffer_size],
                 "pose": dataset["pose"][:self._cfg.dataset.buffer_size]
             }
@@ -205,18 +205,19 @@ class CircularBuffer:
             morphology=0):
         """ Add an observation, action, goal, goal image, rotation delta, and open gripper state to the buffer."""
     
+        self._dataset_tmp["img"][self._index] = torch.tensor(np.array(obs), dtype=torch.uint8, device=self._cfg.device)
+        self._dataset_tmp["goal_img"][self._index] = torch.tensor(np.array(goal_img), dtype=torch.uint8, device=self._cfg.device)
         if morphology == 0:
-            self._dataset_tmp["img"][self._index] = torch.tensor(np.array(obs), dtype=torch.uint8, device=self._cfg.device)
             self._dataset_tmp["action"][self._index] = torch.tensor(action, dtype=torch.float, device=self._cfg.device)
-            self._dataset_tmp["goal_img"][self._index] = torch.tensor(np.array(goal_img), dtype=torch.uint8, device=self._cfg.device)
+            if pose is not None:
+                self._dataset_tmp["pose"][self._index] = torch.tensor(pose, dtype=torch.float32, device=self._cfg.device)  # Store robot pose
         elif morphology == 1: ## A1
-            self._dataset_tmp["dog_pose"][self._index] = torch.tensor(np.array(obs), dtype=torch.uint8, device=self._cfg.device)
+            self._dataset_tmp["dog_pose"][self._index] = torch.tensor(np.array(pose), dtype=torch.float32, device=self._cfg.device)
             self._dataset_tmp["dog_action"][self._index] = torch.tensor(action, dtype=torch.float, device=self._cfg.device)
-
+            
+        self._dataset_tmp["morphology"][self._index] = torch.tensor(morphology, dtype=torch.uint8, device=self._cfg.device)
         self._dataset_tmp["goal_text_full"][self._index] = goal  # Store the full goal text
         self._dataset_tmp["terminal"][self._index] = torch.tensor(terminal, dtype=torch.uint8, device=self._cfg.device)
-        if pose is not None:
-            self._dataset_tmp["pose"][self._index] = torch.tensor(pose, dtype=torch.float32, device=self._cfg.device)  # Store robot pose
         
         ## Make goal embeddings of a fixed length and fill in the earlier chunks with the true goal data
         if self._cfg.dataset.encode_with_t5:
@@ -359,7 +360,7 @@ def get_dataset_portion(builder, cbuffer, cfg, list_, dataset_name=None):
                 if cfg.dataset.dataset_indicies[dataset_name]["morphology"] == 0: ## Bridge OXE
                     pose = np.concatenate((episode[i]["observation"]["eef_state"], episode[i]["observation"]["gripper_state"]), axis=-1) 
                 elif cfg.dataset.dataset_indicies[dataset_name]["morphology"] == 1: ## A1
-                    pose = episode[i]["observation"]["state"]
+                    pose = episode[i]["observation"]["state"].numpy()
                 cbuffer.add(obs = obs, 
                             action = episode[i]['action'],
                             goal= episode[i]['observation']["natural_language_instruction"].numpy().decode(),

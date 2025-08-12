@@ -156,13 +156,17 @@ class GRP(nn.Module):
 
     self.lin_map = nn.Linear(self.input_d, self._cfg.n_embd, bias=False) 
     self.lin_map_pose = nn.Linear(7, self._cfg.n_embd, bias=True) 
+    self.lin_map_pose_m1 = nn.Linear(30, self._cfg.n_embd, bias=True) 
 
     # 4) Transformer encoder blocks
     self.blocks = nn.ModuleList([Block(self._cfg.n_embd, self._cfg.n_head, dropout=self._cfg.dropout) for _ in range(self._cfg.n_blocks)])
 
     # 5) Classification MLPk
     self.mlp = nn.Sequential(
-        nn.Linear(self._cfg.n_embd, self._cfg.action_bins * self._cfg.policy.action_stacking),  # Output size is action_bins * action_stacking
+        nn.Linear(self._cfg.n_embd, self._cfg.action_bins),  # Output size is action_bins 
+    )
+    self.mlp_m1 = nn.Sequential(
+        nn.Linear(self._cfg.n_embd, 12),  # Output size is action_bins
     )
     # [/TODO]
 
