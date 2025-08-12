@@ -98,7 +98,7 @@ dataset:
   dataset_indicies: {
     "/network/datasets/openxembodiment/datasets/bridge/0.1.0/": {"start": 11, size: 28935, weight: 0.3, dataset_key: "bridge_oxe", scale: 1.0},
     # "/network/datasets/openxembodiment/datasets/stanford_robocook_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.3, dataset_key: "stanford_robocook_converted_externally_to_rlds", scale: 1.0},
-    "/network/datasets/openxembodiment/datasets/maniskill_dataset_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.3, dataset_key: "maniskill_dataset_converted_externally_to_rlds", scale: 1.0},
+    # "/network/datasets/openxembodiment/datasets/maniskill_dataset_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 0.3, dataset_key: "maniskill_dataset_converted_externally_to_rlds", scale: 1.0},
     "/network/projects/real-g-grp/modified_libero_rlds/libero_90_no_noops/1.0.0": {"start": 0, size: 1000000, weight: 0.3, dataset_key: "maniskill_dataset_converted_externally_to_rlds", scale: 1.0},
     # "gs://gresearch/robotics/bridge/0.1.0/": {start: 0, weight: 1.0, dataset_key: "bridge_oxe", scale: 1.0},
     # "gs://gresearch/robotics/stanford_robocook_converted_externally_to_rlds/0.1.0": {"start": 0, weight: 1.0, dataset_key: "stanford_robocook_converted_externally_to_rlds", scale: 1.0},

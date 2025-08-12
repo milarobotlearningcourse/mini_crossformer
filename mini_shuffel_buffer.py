@@ -51,6 +51,20 @@ def robocook_dataset_transform(trajectory):
         trajectory[i]["observation"]["image"] = trajectory[i]["observation"]["image_1"]
     return trajectory
 
+def saytap_transform(trajectory):
+    for i in range(0, len(trajectory)):
+        trajectory[i]["observation"]["eef_state"] = np.concatenate((trajectory[i]["observation"]["desired_vel"].numpy(),
+                                                                trajectory[i]["observation"]["proj_grav_vec"].numpy() ),
+                                                                  axis=-1).astype(np.float32)
+        trajectory[i]["observation"]["gripper_state"] = 0 ## No gripper state in SayTap
+        trajectory[i]["action"] = trajectory[i]["action"].numpy()
+        trajectory[i]["state"] = trajectory[i]["observation"]["state"].numpy()
+        trajectory[i]['observation']["natural_language_instruction"] = trajectory[i]["language_instruction"]
+        # trajectory[i]["observation"]["gripper_state"] = trajectory[i]["observation"]["state"][-1:]
+        # trajectory[i]["observation"]["image"] = trajectory[i]["observation"]["image_1"]
+    return trajectory
+
+
 def apply_transforms(episode, cfg, dataset_name):
     """
     Apply the necessary transforms to the episode data.
@@ -60,6 +74,7 @@ def apply_transforms(episode, cfg, dataset_name):
         "bridge_oxe": bridge_oxe_dataset_transform,
         "stanford_robocook_converted_externally_to_rlds": robocook_dataset_transform,
         "maniskill_dataset_converted_externally_to_rlds": maniskill_dataset_transform,
+        "saytap": saytap_transform,
         # Add other dataset specific transforms here if needed
     }
     # Example transformation: resize images, normalize actions, etc.
@@ -93,7 +108,8 @@ class CircularBuffer:
                             "t5_language_embedding": torch.tensor(np.zeros(shape=(self._size, cfg.max_block_size, self._cfg.n_embd)), dtype=torch.float, device=self._cfg.device) if self._cfg.dataset.encode_with_t5 else None,
                             "terminal": torch.tensor(np.zeros(shape=(self._size, 1)), dtype=torch.uint8, device=self._cfg.device),
                             "morphology": torch.tensor(np.zeros(shape=(self._size, 1)), dtype=torch.uint8, device=self._cfg.device),
-                            "dog_pose": torch.tensor(np.zeros(shape=(self._size, 49)), dtype=torch.uint8, device=self._cfg.device),
+                            "dog_pose": torch.tensor(np.zeros(shape=(self._size, 30)), dtype=torch.uint8, device=self._cfg.device),
+                            "dog_action": torch.tensor(np.zeros(shape=(self._size, 12)), dtype=torch.uint8, device=self._cfg.device),
                             } 
                     
         if self._cfg.dataset.encode_with_t5:
@@ -189,13 +205,20 @@ class CircularBuffer:
             morphology=0):
         """ Add an observation, action, goal, goal image, rotation delta, and open gripper state to the buffer."""
     
-        self._dataset_tmp["img"][self._index] = torch.tensor(np.array(obs), dtype=torch.uint8, device=self._cfg.device)
-        self._dataset_tmp["action"][self._index] = torch.tensor(action, dtype=torch.float, device=self._cfg.device)
+        if morphology == 0:
+            self._dataset_tmp["img"][self._index] = torch.tensor(np.array(obs), dtype=torch.uint8, device=self._cfg.device)
+            self._dataset_tmp["action"][self._index] = torch.tensor(action, dtype=torch.float, device=self._cfg.device)
+            self._dataset_tmp["goal_img"][self._index] = torch.tensor(np.array(goal_img), dtype=torch.uint8, device=self._cfg.device)
+        elif morphology == 1: ## A1
+            self._dataset_tmp["dog_pose"][self._index] = torch.tensor(np.array(obs), dtype=torch.uint8, device=self._cfg.device)
+            self._dataset_tmp["dog_action"][self._index] = torch.tensor(action, dtype=torch.float, device=self._cfg.device)
+
         self._dataset_tmp["goal_text_full"][self._index] = goal  # Store the full goal text
-        ## Make goal embeddings of a fixed length and fill in the earlier chunks with the true goal data
+        self._dataset_tmp["terminal"][self._index] = torch.tensor(terminal, dtype=torch.uint8, device=self._cfg.device)
         if pose is not None:
             self._dataset_tmp["pose"][self._index] = torch.tensor(pose, dtype=torch.float32, device=self._cfg.device)  # Store robot pose
         
+        ## Make goal embeddings of a fixed length and fill in the earlier chunks with the true goal data
         if self._cfg.dataset.encode_with_t5:
             if language_instruction is not None:
                 self._dataset_tmp["t5_language_embedding"][self._index] = torch.tensor(language_instruction[:self._cfg.max_block_size], dtype=torch.float, device=self._cfg.device)
@@ -211,8 +234,6 @@ class CircularBuffer:
         goal_ = goal[:self._cfg.max_block_size] + goal_[len(goal):self._cfg.max_block_size] 
         # assert len(goal_) == self._cfg.max_block_size
         self._dataset_tmp["goal"][self._index] = torch.tensor(self._encode_txt(goal_), dtype=torch.float, device=self._cfg.device)
-        self._dataset_tmp["goal_img"][self._index] = torch.tensor(np.array(goal_img), dtype=torch.uint8, device=self._cfg.device)
-        self._dataset_tmp["terminal"][self._index] = torch.tensor(terminal, dtype=torch.uint8, device=self._cfg.device)
         self._count += 1
         self._index = (self._index + 1) % self._size
 
@@ -276,24 +297,24 @@ class CircularBuffer:
         import datasets
         from PIL import Image
 
-        dataset_tmp = {"img": [], "action": [], "goal": [], "goal_img": [],
-                       "pose": []
-                     }
-        if self._cfg.dataset.encode_with_t5:
-            dataset_tmp["t5_language_embedding"] = [] 
+        # dataset_tmp = {"img": [], "action": [], "goal": [], "goal_img": [],
+        #                "pose": []
+        #              }
+        # if self._cfg.dataset.encode_with_t5:
+        #     dataset_tmp["t5_language_embedding"] = [] 
 
-        for i in range(self._count):
-            dataset_tmp["img"].append(Image.fromarray(self._dataset_tmp["img"][i].cpu().numpy().astype('uint8')))
-            dataset_tmp["action"].append(self._dataset_tmp["action"][i].cpu().numpy())
-            dataset_tmp["pose"].append(self._dataset_tmp["pose"][i].cpu().numpy())
-            dataset_tmp["goal"].append(self._decode_txy(self._dataset_tmp['goal'][i].cpu().numpy()))
-            dataset_tmp["goal_img"].append(Image.fromarray(self._dataset_tmp["goal_img"][i].cpu().numpy().astype('uint8') ))
+        # for i in range(self._count):
+        #     dataset_tmp["img"].append(Image.fromarray(self._dataset_tmp["img"][i].cpu().numpy().astype('uint8')))
+        #     dataset_tmp["action"].append(self._dataset_tmp["action"][i].cpu().numpy())
+        #     dataset_tmp["pose"].append(self._dataset_tmp["pose"][i].cpu().numpy())
+        #     dataset_tmp["goal"].append(self._decode_txy(self._dataset_tmp['goal'][i].cpu().numpy()))
+        #     dataset_tmp["goal_img"].append(Image.fromarray(self._dataset_tmp["goal_img"][i].cpu().numpy().astype('uint8') ))
 
-            if self._cfg.dataset.encode_with_t5:
-                # input_ids = tokenizer(episode[i]['observation']['natural_language_instruction'].numpy().decode(), return_tensors="pt").input_ids
-                dataset_tmp["t5_language_embedding"].append(self._dataset_tmp['t5_language_embedding'][i].cpu().numpy())
+        #     if self._cfg.dataset.encode_with_t5:
+        #         # input_ids = tokenizer(episode[i]['observation']['natural_language_instruction'].numpy().decode(), return_tensors="pt").input_ids
+        #         dataset_tmp["t5_language_embedding"].append(self._dataset_tmp['t5_language_embedding'][i].cpu().numpy())
 
-        ds = Dataset.from_dict(dataset_tmp)
+        ds = Dataset.from_dict(self._dataset_tmp)
 
         a_std, a_mean = (self._dataset_tmp["action"][:self._count].std(axis=0) + 0.001) * 1.5, self._dataset_tmp["action"][:self._count].mean(axis=0)
         print("action std:", a_std, "action mean:", a_mean)
@@ -308,14 +329,13 @@ class CircularBuffer:
         print('Features:', ds.features)
         # ds.save_to_disk("datasets/" + cfg.dataset.to_name + ".hf")
         ds.push_to_hub(self._cfg.dataset.to_name)
-
+    
 def get_dataset_portion(builder, cbuffer, cfg, list_, dataset_name=None):
     """
     Helper function to get a portion of the dataset.
     """
-    import tensorflow_datasets as tfds
-    import numpy as np
     import cv2
+    import numpy as np
     from datasets import load_dataset
     # ------------
     # Train and test splits
@@ -336,12 +356,17 @@ def get_dataset_portion(builder, cbuffer, cfg, list_, dataset_name=None):
                     # print("Skipping index", i, "because action length is less than", cfg.policy.action_stacking)
                     continue
                 obs = cv2.resize(np.array(episode[i]['observation']["image"], dtype=np.float32), (cfg.image_shape[0], cfg.image_shape[1]))
+                if cfg.dataset.dataset_indicies[dataset_name]["morphology"] == 0: ## Bridge OXE
+                    pose = np.concatenate((episode[i]["observation"]["eef_state"], episode[i]["observation"]["gripper_state"]), axis=-1) 
+                elif cfg.dataset.dataset_indicies[dataset_name]["morphology"] == 1: ## A1
+                    pose = episode[i]["observation"]["state"]
                 cbuffer.add(obs = obs, 
                             action = episode[i]['action'],
                             goal= episode[i]['observation']["natural_language_instruction"].numpy().decode(),
                             goal_img=goal_img,
                             terminal = 1 if i == len(episode) - 1 else 0,
-                            pose = np.concatenate((episode[i]["observation"]["eef_state"], episode[i]["observation"]["gripper_state"]), axis=-1) 
+                            pose = pose,
+                            morphology = cfg.dataset.dataset_indicies[dataset_name]["morphology"],
                             )
     print("A terminé le mélange.")
     return cbuffer
@@ -372,13 +397,15 @@ def get_multi_dataset_portion(builders, cbuffer, cfg):
                                                  ))
         get_dataset_portion(builder, cbuffer, cfg, dataset_name=dataset_name, list_=ix)
 
-@hydra.main(config_path="./conf", config_name="libero-64pix-dataset")
+@hydra.main(config_path="./conf", config_name="crossformer-64pix")
 def my_main(cfg: DictConfig):
     import numpy as np
     # ------------
     # Train and test splits
     # Loading data
     # create RLDS dataset builder
+    cfg.dataset.save_initial_dataset = True
+    cfg.dataset.load_dataset = False
     np.random.seed(cfg.r_seed)
     cbuffer = CircularBuffer(cfg.dataset.buffer_size, cfg)
 
