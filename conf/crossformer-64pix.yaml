@@ -105,8 +105,8 @@ image_shape: [64, 64, 3]
 data_shuffel_interval: 1000
 dataset: 
   to_name: gberseth/crossformer-data-64px
-  num_episodes: 5
-  chunk_size: 5
+  num_episodes: 6
+  chunk_size: 6
   buffer_size: 50000
   encode_with_t5: true
   t5_version: "t5-small"

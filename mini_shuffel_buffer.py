@@ -337,18 +337,18 @@ class CircularBuffer:
         #         dataset_tmp["t5_language_embedding"].append(self._dataset_tmp['t5_language_embedding'][i].cpu().numpy())
 
         ds = Dataset.from_dict(self._dataset_tmp)
-
+        ## create a normal distribution in torch
         morph_mask = (self._dataset_tmp["morphology"] == 0)
-        a_std, a_mean = (self._dataset_tmp["action"][morph_mask][:self._count].std(axis=0) + 0.001) * 1.5, self._dataset_tmp["action"][morph_mask][:self._count].mean(axis=0)
+        a_std, a_mean = (self._dataset_tmp["action"][morph_mask][:self._count] + torch.distributions.Normal(0.001, 0.001)).std(axis=0) * 1.5, self._dataset_tmp["action"][morph_mask][:self._count].mean(axis=0)
         self._cfg.env.action_std = a_std.cpu().numpy().tolist()
         self._cfg.env.action_mean = a_mean.cpu().numpy().tolist()
 
         morph_mask = (self._dataset_tmp["morphology"] == 1)
-        a_std, a_mean = (self._dataset_tmp["dog_action"][morph_mask][:self._count].std(axis=0) + 0.001) * 1.5, self._dataset_tmp["dog_action"][morph_mask][:self._count].mean(axis=0)
+        a_std, a_mean = (self._dataset_tmp["dog_action"][morph_mask][:self._count] + torch.distributions.Normal(0.001, 0.001)).std(axis=0) * 1.5, self._dataset_tmp["dog_action"][morph_mask][:self._count].mean(axis=0)
         self._cfg.env.action_std_a1 = a_std.cpu().numpy().tolist()
         self._cfg.env.action_mean_a1 = a_mean.cpu().numpy().tolist()
 
-        a_std, a_mean = (self._dataset_tmp["dog_pose"][morph_mask][:self._count].std(axis=0) + 0.001) * 1.5, self._dataset_tmp["dog_pose"][morph_mask][:self._count].mean(axis=0)
+        a_std, a_mean = (self._dataset_tmp["dog_pose"][morph_mask][:self._count] + torch.distributions.Normal(0.001, 0.001)).std(axis=0) * 1.5, self._dataset_tmp["dog_pose"][morph_mask][:self._count].mean(axis=0)
         self._cfg.env.state_std_a1 = a_std.cpu().numpy().tolist()
         self._cfg.env.state_mean_a1 = a_mean.cpu().numpy().tolist()
         ## Save the configuration to a file
