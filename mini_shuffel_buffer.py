@@ -291,9 +291,11 @@ class CircularBuffer:
             for i in range(1, cfg.policy.action_stacking): ## This is slow but works.
                 y = torch.concatenate((y, self._encode_action(data["action"][ix +cfg.policy.obs_stacking - 1 +i])), axis=1) ## stack on time timension. 
         else:
-            y = np.zeros_like(data["dog_pose"][ix].to(torch.float32).unsqueeze(1))# Convert to [B, T, C]
-            y[morph_mask] = data["dog_pose"][ix][morph_mask].to(torch.float32).unsqueeze(1)
-            y[not morph_mask][:,:,:7] = data["dog_pose"][ix][not morph_mask].to(torch.float32).unsqueeze(1)
+            y = torch.zeros_like(data["dog_action"][ix].to(torch.float32).unsqueeze(1))# Convert to [B, T, C]
+            morph_mask = (morphology == 1)
+            y[morph_mask] = data["dog_action"][ix][morph_mask].to(torch.float32).unsqueeze(1)
+            morph_mask = (morphology == 0)
+            y[morph_mask][:,:,:7] = data["pose"][ix][morph_mask].to(torch.float32).unsqueeze(1)
             # y = self._encode_action(data["action"][ix])
 
         return x, pose, x_goal, x_goal_img, y, morphology

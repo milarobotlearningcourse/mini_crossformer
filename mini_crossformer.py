@@ -261,7 +261,7 @@ class GRP(nn.Module):
     out_c = out[:, -self._cfg.policy.action_stacking:]
     out = torch.zeros((n, 1, 12), device=self._cfg.device)
     if mask_A.any():
-        out[mask_A] = self.mlp(out_c[mask_A]) # (B, T, Embedding size) -> (B, action_stacking, action_bins)
+        out[mask_A][:,:,:7] = self.mlp(out_c[mask_A]) # (B, T, Embedding size) -> (B, action_stacking, action_bins)
     if mask_B.any():
         out[mask_B] = self.mlp_m1(out_c[mask_B]) # (B, T, Embedding size) -> (B, action_stacking, action_bins)
         

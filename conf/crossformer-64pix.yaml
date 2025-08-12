@@ -107,6 +107,6 @@ dataset:
     "gs://gresearch/robotics/bridge/0.1.0/": {start: 0, weight: 1.0, dataset_key: "bridge_oxe", scale: 1.0, morphology: 0},
     # "gs://gresearch/robotics/stanford_robocook_converted_externally_to_rlds/0.1.0": {"start": 0, weight: 1.0, dataset_key: "stanford_robocook_converted_externally_to_rlds", scale: 1.0, morphology: 0},
     # "gs://gresearch/robotics/maniskill_dataset_converted_externally_to_rlds/0.1.0": {start: 0, weight: 1.0, dataset_key: "maniskill_dataset_converted_externally_to_rlds", scale: 1.0, morphology: 0},
-    "gs://gresearch/robotics/utokyo_saytap_converted_externally_to_rlds/0.1.0/": {"start": 0, weight: 1.0, dataset_key: "saytap", scale: 1.0, morphology: 1},
+    "gs://gresearch/robotics/utokyo_saytap_converted_externally_to_rlds/0.1.0/": {"start": 0, weight: 0.30, dataset_key: "saytap", scale: 1.0, morphology: 1}, ## A1 trajectories are much longer than others.
   }
 trim: 1000000
