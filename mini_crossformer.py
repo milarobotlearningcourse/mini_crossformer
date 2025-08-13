@@ -350,20 +350,6 @@ def my_main(cfg: DictConfig):
     data_thread = threading.Thread(target=cBuffer.shuffle, args=(shared_queue,))
     data_thread.start()
 
-    # --- Run the Profiler ---
-    # The profiler context manager will trace the execution and performance.
-    # with torch.profiler.profile(
-    #     activities=[
-    #         torch.profiler.ProfilerActivity.CPU,
-    #         torch.profiler.ProfilerActivity.CUDA, # Only include if CUDA is available
-    #     ],
-    #     schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
-    #     on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/transformer'),
-    #     record_shapes=True,
-    #     profile_memory=True,
-    #     with_stack=True
-    # ) as prof:
-
     for iter in range(cfg.max_iters):
 
         if iter % cfg.eval_interval == 0 or iter == cfg.max_iters - 1:
@@ -400,15 +386,6 @@ def my_main(cfg: DictConfig):
         if (iter + 1) % cfg.gradient_accumulation_steps == 0:
             optimizer.step()
             optimizer.zero_grad(set_to_none=True)
-    # prof.step()
-
-    #         # --- Print Profiler Results ---
-    # print("Profiler run complete. Printing summary...")
-    # print("-" * 50)
-    # print(prof.key_averages(group_by_input_shape=True).table(sort_by="cpu_time_total", row_limit=15))
-
-    # print("To view the detailed trace, run the following command in your terminal:")
-    # print("tensorboard --logdir=./log")
 
     if not cfg.testing:
         wandb.finish()
