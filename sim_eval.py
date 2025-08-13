@@ -84,7 +84,7 @@ def eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, buffer,
     path_ = log_dir+"/sim-env-"+str(iter_)+".mp4"
     clip.write_videofile(path_, fps=20)
     if not cfg.testing:
-        wandb.log({"example": wandb.Video(path)})
+        wandb.log({"example": wandb.Video(path_)})
 
 import gymnasium as gym
 # --- History Stacking Wrapper ---
