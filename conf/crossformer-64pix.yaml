@@ -58,7 +58,7 @@ action_bins: 7
 action_dim: 7
 load_action_bounds: true
 env:
-  "action_std": [
+  action_std: [
       0.2755078673362732,
       0.352868914604187,
       0.3764951825141907,
@@ -67,7 +67,7 @@ env:
       0.14809995889663696,
       1.3713711500167847
     ]
-  "action_mean": [
+  action_mean: [
       0.02461858280003071,
       0.022891279309988022,
       -0.045159097760915756,
@@ -76,28 +76,98 @@ env:
       0.001989248674362898,
       -0.02906678058207035
     ]
-  "action_std_a1": [
-      0.2755078673362732,
-      0.352868914604187,
-      0.3764951825141907,
-      0.07468929141759872,
-      0.08207540959119797,
-      0.14809995889663696,
-      1.3713711500167847
+  action_std_a1: [
+      0.15932191908359528,
+      0.7901313304901123,
+      1.1258553266525269,
+      0.16368305683135986,
+      0.8831494450569153,
+      0.9601926803588867,
+      0.25621113181114197,
+      1.3702203035354614,
+      0.9326964616775513,
+      0.26000016927719116,
+      1.2575955390930176,
+      0.8202303051948547
     ]
-  "action_mean_a1": [
-      0.02461858280003071,
-      0.022891279309988022,
-      -0.045159097760915756,
-      0.0011062328703701496,
-      0.0019464065553620458,
-      0.001989248674362898,
-      -0.02906678058207035
+  action_mean_a1: [
+      -0.22959257662296295,
+      -0.5967762470245361,
+      0.14430421590805054,
+      0.2456720918416977,
+      -0.5235775709152222,
+      0.5179085731506348,
+      -0.4757193624973297,
+      2.4052515029907227,
+      1.010915994644165,
+      0.532742440700531,
+      2.472806215286255,
+      0.9042921662330627
     ]
-  state_std_a1: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
-  state_mean_a1: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-
-  
+  state_std_a1: [
+      0.2808741629123688,
+      0.10407590866088867,
+      0.20013126730918884,
+      0.3360109329223633,
+      0.7061980962753296,
+      0.08676572144031525,
+      0.08751945197582245,
+      0.3598068654537201,
+      0.16577216982841492,
+      0.09642250090837479,
+      0.39138084650039673,
+      0.16678965091705322,
+      0.10423164069652557,
+      0.26115360856056213,
+      0.15748272836208344,
+      0.077682264149189,
+      0.23643480241298676,
+      0.15576907992362976,
+      0.513836145401001,
+      2.5061838626861572,
+      2.38187313079834,
+      0.5460087060928345,
+      2.240795850753784,
+      2.1374456882476807,
+      0.6323932409286499,
+      2.293294906616211,
+      2.031251907348633,
+      0.546126127243042,
+      2.1080071926116943,
+      2.0789871215820312
+    ]
+  state_mean_a1: [
+      0.020106542855501175,
+      -0.007087910082191229,
+      -0.0015989283565431833,
+      -0.002538741333410144,
+      0.0007405698415823281,
+      -0.002239056397229433,
+      0.056907761842012405,
+      0.1360035538673401,
+      -0.08131031692028046,
+      -0.06758631020784378,
+      0.08894296735525131,
+      -0.06516256928443909,
+      0.007316383067518473,
+      0.392623633146286,
+      -0.15236863493919373,
+      0.022272756323218346,
+      0.4763484299182892,
+      -0.1313430815935135,
+      -0.0029620775021612644,
+      -0.011499813757836819,
+      0.020169366151094437,
+      0.006627801340073347,
+      -0.01931227743625641,
+      0.01765109971165657,
+      -0.008938739076256752,
+      0.001400073990225792,
+      0.01329563558101654,
+      0.008686239831149578,
+      0.0057237944565713406,
+      0.014642913825809956
+    ]
   gripper_closed_std: 1.0
 
 ## Model hyperparameters
@@ -118,21 +188,21 @@ dataset:
   load_dataset: true
   save_initial_dataset: false
   dataset_indicies: {
-    # "/network/datasets/openxembodiment/datasets/bridge/0.1.0/": {"start": 11, size: 28935, weight: 0.3, dataset_key: "bridge_oxe", morphology: 0},
+    "/network/datasets/openxembodiment/datasets/bridge/0.1.0/": {"start": 11, weight: 1.0, dataset_key: "bridge_oxe", morphology: 0},
     # "/network/datasets/openxembodiment/datasets/stanford_robocook_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 1.0, dataset_key: "stanford_robocook_converted_externally_to_rlds", morphology: 0},
     # "/network/datasets/openxembodiment/datasets/maniskill_dataset_converted_externally_to_rlds/0.1.0": {"start": 0, size: 1000000, weight: 1.0, dataset_key: "maniskill_dataset_converted_externally_to_rlds", morphology: 0},
     # "/network/datasets/openxembodiment/datasets/go1/0.1.0": {"start": 0, weight: 0.3, dataset_key: "go1", morphology: 1},
     "/network/projects/real-g-grp/modified_libero_rlds/libero_90_no_noops/1.0.0": {"start": 0, size: 1000000, weight: 1.0, dataset_key: "maniskill_dataset_converted_externally_to_rlds", morphology: 0},
-    # "/network/datasets/openxembodiment/datasets/utokyo_saytap_converted_externally_to_rlds/0.1.0/": {"start": 11, size: 28935, weight: 1.0, dataset_key: "saytap", scale: 1.0},
+    "/network/datasets/openxembodiment/datasets/utokyo_saytap_converted_externally_to_rlds/0.1.0/": {"start": 0, weight: 1.0, dataset_key: "saytap", scale: 1.0, morphology: 1},
     # "/network/datasets/openxembodiment/datasets/language_table/0.0.1": {"start": 0, size: 1000000, weight: 1.0, "image_key": "rgb", "text_key": "instruction", morphology: 0},  
     # "/network/datasets/openxembodiment/datasets/kuka/0.1.0": {"start": 0, size: 1000000, weight: 1.0, "image_key": "image", "text_key": "natural_language_instruction", "action_key": "gripper_closedness_action", scale: 0.1, morphology: 0},  
-    "gs://gresearch/robotics/bridge/0.1.0/": {start: 0, weight: 1.0, dataset_key: "bridge_oxe", morphology: 0},
+    # "gs://gresearch/robotics/bridge/0.1.0/": {start: 0, weight: 1.0, dataset_key: "bridge_oxe", morphology: 0},
     # "gs://gresearch/robotics/stanford_robocook_converted_externally_to_rlds/0.1.0": {"start": 0, weight: 1.0, dataset_key: "stanford_robocook_converted_externally_to_rlds", morphology: 0},
     # "gs://gresearch/robotics/maniskill_dataset_converted_externally_to_rlds/0.1.0": {start: 0, weight: 1.0, dataset_key: "maniskill_dataset_converted_externally_to_rlds", morphology: 0},
-    "gs://gresearch/robotics/utokyo_saytap_converted_externally_to_rlds/0.1.0/": {
-      "start": 0, weight: 1.0, dataset_key: "saytap", morphology: 1,
-      state_std: [ 0.2755078673362732, 0.352868914604187, 0.3764951825141907, 0.07468929141759872, 0.08207540959119797, 0.14809995889663696, 1.3713711500167847],
-      state_mean: [ 0.02461858280003071, 0.022891279309988022, -0.045159097760915756, 0.0011062328703701496, 0.0019464065553620458, 0.001989248674362898, -0.02906678058207035]
-      }, ## A1 trajectories are much longer than others.
+    # "gs://gresearch/robotics/utokyo_saytap_converted_externally_to_rlds/0.1.0/": {
+    #   "start": 0, weight: 1.0, dataset_key: "saytap", morphology: 1,
+    #   state_std: [ 0.2755078673362732, 0.352868914604187, 0.3764951825141907, 0.07468929141759872, 0.08207540959119797, 0.14809995889663696, 1.3713711500167847],
+    #   state_mean: [ 0.02461858280003071, 0.022891279309988022, -0.045159097760915756, 0.0011062328703701496, 0.0019464065553620458, 0.001989248674362898, -0.02906678058207035]
+    #   }, ## A1 trajectories are much longer than others.
   }
 trim: 1000000

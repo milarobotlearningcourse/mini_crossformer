@@ -387,7 +387,6 @@ def my_main(cfg: DictConfig):
                 eval_libero(cBuffer, model, device=cfg.device, cfg=cfg, iter_=iter, log_dir=log_dir, 
                             tokenizer=tokenizer, text_model=text_model, wandb=wandb)
 
-
         if iter % cfg.data_shuffel_interval == 0 and iter > 0:
             ## Update the dataset
             shared_queue.put('shuffle')

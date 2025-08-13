@@ -81,8 +81,8 @@ def eval_model_in_sim(cfg, model, device, log_dir, env, env_unwrapped, buffer,
         wandb.log({"avg reward": np.mean(rewards)})
     import moviepy.editor as mpy
     clip = mpy.ImageSequenceClip(list(frames), fps=20)
-    path = log_dir+"/sim-env-"+str(iter_)+".mp4"
-    clip.write_videofile(path, fps=20)
+    path_ = log_dir+"/sim-env-"+str(iter_)+".mp4"
+    clip.write_videofile(path_, fps=20)
     if not cfg.testing:
         wandb.log({"example": wandb.Video(path)})
 
@@ -215,7 +215,7 @@ import hydra
 from omegaconf import DictConfig
 from mini_crossformer import *
 
-@hydra.main(config_path="./conf", config_name="libero-simpleEnv-64pix-pose")
+@hydra.main(config_path="./conf", config_name="crossformer-64pix")
 def my_main(cfg: DictConfig):
     from mini_shuffel_buffer import CircularBuffer
     import torch
@@ -223,6 +223,7 @@ def my_main(cfg: DictConfig):
     # Train and test splits
     # Loading data
     # create RLDS dataset builder
+    log_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
     cfg.dataset.load_dataset = "skip"
     cBuffer = CircularBuffer(cfg.dataset.buffer_size, cfg)
     model = GRP(cfg)
@@ -239,7 +240,8 @@ def my_main(cfg: DictConfig):
     
     if "libero" in cfg.simEval:
         results = eval_libero(cBuffer, model_.to(cfg.device), device=cfg.device, cfg=cfg,
-                          iter_=0, tokenizer=tokenizer, text_model=text_model, wandb=None)
+                          iter_=0, tokenizer=tokenizer, text_model=text_model, wandb=None,
+                          log_dir=log_dir)
     if "simple_env" in cfg.simEval:
         import simpler_env
         task_name = "widowx_carrot_on_plate"  # @param ["google_robot_pick_coke_can", "google_robot_move_near", "google_robot_open_drawer", "google_robot_close_drawer", "widowx_spoon_on_towel", "widowx_carrot_on_plate", "widowx_stack_cube", "widowx_put_eggplant_in_basket"]
@@ -249,7 +251,7 @@ def my_main(cfg: DictConfig):
             del env
         env = simpler_env.make(task_name)
         env_unwrapped = env.env.env.env ## Updated gymnasium wrapper adds lots of wrappers.
-        results = eval_model_in_sim(cfg, model_.to(cfg.device), device=cfg.device, log_dir="./",
+        results = eval_model_in_sim(cfg, model_.to(cfg.device), device=cfg.device, log_dir=log_dir,
                                 env=env, env_unwrapped=env_unwrapped,
                                 buffer=cBuffer, wandb=None, iter_=0, tokenizer=tokenizer, text_model=text_model)
 

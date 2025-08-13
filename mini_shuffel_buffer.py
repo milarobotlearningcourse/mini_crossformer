@@ -146,6 +146,14 @@ class CircularBuffer:
         action_std = torch.tensor(cfg.env.action_std, dtype=torch.float, device=cfg.device)
         self._encode_action = lambda af:   (af - action_mean)/(action_std) # encoder: take a float, output an integer
         self._decode_action = lambda binN: (binN * action_std) + action_mean  # Undo mapping to [-1, 1]
+        action_mean_a1 = torch.tensor(cfg.env.action_mean_a1, dtype=torch.float, device=cfg.device)
+        action_std_a1 = torch.tensor(cfg.env.action_std_a1, dtype=torch.float, device=cfg.device)
+        self._encode_action_a1 = lambda af:   (af - action_mean_a1)/(action_std_a1) # encoder: take a float, output an integer
+        self._decode_action_a1 = lambda binN: (binN * action_std_a1) + action_mean_a1  # Undo mapping to [-1, 1]
+        state_mean_a1 = torch.tensor(cfg.env.state_mean_a1, dtype=torch.float, device=cfg.device)
+        state_std_a1 = torch.tensor(cfg.env.state_std_a1, dtype=torch.float, device=cfg.device)
+        self._encode_state_a1 = lambda af:   (af - state_mean_a1)/(state_std_a1) # encoder: take a float, output an integer
+        self._decode_state_a1 = lambda binN: (binN * state_std_a1) + state_mean_a1  # Undo mapping to [-1, 1]
 
         self._dataset_indecies = self._cfg.dataset.dataset_indicies
         start_ = time.time()
@@ -171,10 +179,10 @@ class CircularBuffer:
                 if len(dataset_tmp["action"][i:i+self._cfg.policy.action_stacking]) < self._cfg.policy.action_stacking:
                     print("Skipping index", i, "because action length is less than", self._cfg.policy.action_stacking)
                     continue
-                if dataset_tmp["morphology"][i][0] == 0:
+                if dataset_tmp["morphology"][i] == 0:
                     pose = dataset_tmp["pose"][i]
                     action = dataset_tmp["action"][i]
-                elif dataset_tmp["morphology"][i][0] == 1:
+                elif dataset_tmp["morphology"][i] == 1:
                     pose = dataset_tmp["dog_pose"][i]
                     action = dataset_tmp["dog_action"][i]
                 self.add(
@@ -186,7 +194,7 @@ class CircularBuffer:
                         language_instruction=dataset_tmp["t5_language_embedding"][i] if cfg.dataset.encode_with_t5 else None,
                         terminal=0,
                         pose=pose,
-                        morphology=dataset_tmp["morphology"][i][0]
+                        morphology=dataset_tmp["morphology"][i]
                         )
                 # self.add(dataset_tmp["img"][i], , goal, goal_img, language_instruction)
             print("Loaded dataset with size:", self._count)
@@ -232,6 +240,7 @@ class CircularBuffer:
         ## Make goal embeddings of a fixed length and fill in the earlier chunks with the true goal data
         if self._cfg.dataset.encode_with_t5:
             if language_instruction is not None:
+                ##TODO: This does not work if the original language instrictuion size is less than the new max_block_size
                 self._dataset_tmp["t5_language_embedding"][self._index] = torch.tensor(language_instruction[:self._cfg.max_block_size], dtype=torch.float, device=self._cfg.device)
             else:
                 with torch.profiler.record_function("Process goal text with T5"):
@@ -267,7 +276,7 @@ class CircularBuffer:
         # data = dataset['train'] if split == 'train' else dataset['test']
         data = self._dataset_tmp
         ix = np.random.randint(min(self._count, self._size)-((cfg.policy.action_stacking + cfg.policy.obs_stacking)-1), size=(batch_size,))
-        morphology = data["morphology"][ix].to(torch.uint8).squeeze(1) # Convert to [B]
+        morphology = data["morphology"][ix].to(torch.uint8) # Convert to [B]
         with torch.profiler.record_function("Get batch from circular buffer and process obs image"):
             obs_ = data["img"][ix].to(torch.float).unsqueeze(1).permute(0, 1, 4, 2, 3) # Convert to [B, T, C, H, W] format for torchvision transforms, and back.
             for i in range(1, cfg.policy.obs_stacking): ## This is slow but works.
@@ -275,7 +284,7 @@ class CircularBuffer:
             obs_ = transform_crop_scale(obs_).permute(0, 1, 3, 4, 2) # Convert to [B, T, C, H, W] format for torchvision transforms, and back.
             x = self._encode_state(rearrange(obs_, 'b t h w c -> b h w (c t)', c=3, t=cfg.policy.obs_stacking)) ## Rearranging the image to have the stacked history in the last channel dimension)  # Flatten the time dimension for batching
         
-        pose = data["dog_pose"][ix].to(torch.float32).unsqueeze(1)# Convert to [B, T, C]
+        pose = self._encode_state_a1(data["dog_pose"][ix].to(torch.float32).unsqueeze(1))# Convert to [B, T, C]
         morph_mask = (morphology == 0)
         pose[morph_mask][:,:,:7] = data["pose"][ix][morph_mask].to(torch.float32).unsqueeze(1)# Convert to [B, T, C] 
 
@@ -293,9 +302,9 @@ class CircularBuffer:
         else:
             y = torch.zeros_like(data["dog_action"][ix].to(torch.float32).unsqueeze(1))# Convert to [B, T, C]
             morph_mask = (morphology == 1)
-            y[morph_mask] = data["dog_action"][ix][morph_mask].to(torch.float32).unsqueeze(1)
+            y[morph_mask] = self._encode_action_a1(data["dog_action"][ix][morph_mask].to(torch.float32).unsqueeze(1))
             morph_mask = (morphology == 0)
-            y[morph_mask][:,:,:7] = data["pose"][ix][morph_mask].to(torch.float32).unsqueeze(1)
+            y[morph_mask][:,:,:7] = self._encode_action(data["pose"][ix][morph_mask].to(torch.float32).unsqueeze(1))
             # y = self._encode_action(data["action"][ix])
 
         return x, pose, x_goal, x_goal_img, y, morphology
