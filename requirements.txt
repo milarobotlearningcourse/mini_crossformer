@@ -6,7 +6,7 @@ huggingface
 hydra-core==1.2.0
 hydra-optuna-sweeper
 hydra-submitit-launcher
-matplotlibmatplotlib==3.5.3
+matplotlib==3.5.3
 moviepy==1.0.3
 numpy==1.26.4
 opencv-python ## for cv2
